@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -17,6 +17,7 @@ import {
   subscribeHostStructuredAgents
 } from '@/runtime/host-structured-agents'
 import { useManagedRuntimeInstall } from '@/runtime/use-managed-runtime-install'
+import { callAntigravityAccounts } from '@/runtime/runtime-antigravity-accounts-client'
 import { useAppStore } from '../../store'
 import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
 import { createAgentSettingsUpdateQueue } from './agent-availability-settings'
@@ -25,6 +26,8 @@ import { ManagedRuntimeInstallRow } from '../managed-runtime/ManagedRuntimeInsta
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitch } from './SettingsFormControls'
 import { getChatProvidersSearchEntry } from './chat-providers-search'
+import { AntigravityChatSignInRow, antigravityChatSignInBlocked } from './AntigravityChatSignInRow'
+import { getHostRuntimeLabel, getRuntimeSentenceLabel } from './accounts-pane-runtime'
 
 const enqueueProviderUpdate = createAgentSettingsUpdateQueue()
 
@@ -125,6 +128,47 @@ function ProviderDetail(props: {
   )
 }
 
+/** Antigravity chats sign in on this computer, directly below the program they run. */
+function AntigravityChatProviderSignIn(): React.JSX.Element | null {
+  const runtime = useManagedRuntimeInstall(CHAT_HOST, 'antigravity', true)
+  const [saved, setSaved] = useState(false)
+  const [listRequest, setListRequest] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    // A failed read leaves the row offering sign-in, which is still correct to act on.
+    void callAntigravityAccounts(CHAT_HOST, { runtime: 'host' }, 'List').then(
+      (state) => {
+        if (!cancelled) {
+          setSaved(state.chatSignIn?.saved === true)
+        }
+      },
+      () => undefined
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [listRequest])
+  if (runtime.kind !== 'active') {
+    return null
+  }
+  // Indented to the provider's name, past its icon.
+  return (
+    <div className="pl-10">
+      <AntigravityChatSignInRow
+        owner={CHAT_HOST}
+        label={getRuntimeSentenceLabel({ runtime: 'host', label: getHostRuntimeLabel() })}
+        description={translate(
+          'settings.chat.providers.antigravitySignIn',
+          'Chats use their own Antigravity sign-in, separate from your agy terminal account. Sign in once on this device.'
+        )}
+        saved={saved}
+        disabled={antigravityChatSignInBlocked(runtime)}
+        onSettled={() => setListRequest((request) => request + 1)}
+      />
+    </div>
+  )
+}
+
 export function NativeChatProvidersSetting({
   settings,
   updateSettings,
@@ -159,34 +203,41 @@ export function NativeChatProvidersSetting({
               const enabledInAgents = isTuiAgentEnabled(agent, settings.disabledTuiAgents)
               const on = isNativeChatProviderDisplayedOn(settings, agent, detectedIds)
               return (
-                <div key={agent} className="flex items-center gap-3 py-3">
-                  <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
-                    <AgentIcon agent={agent} size={16} />
+                <div key={agent} className="space-y-3 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
+                      <AgentIcon agent={agent} size={16} />
+                    </div>
+                    <ProviderDetail
+                      agent={agent}
+                      label={label}
+                      installed={detectedIds}
+                      enabledInAgents={enabledInAgents}
+                    />
+                    <SettingsSwitch
+                      checked={on}
+                      disabled={!enabledInAgents}
+                      ariaLabel={translate(
+                        'settings.chat.providers.toggleLabel',
+                        'Open {{value0}} as a chat',
+                        { value0: label }
+                      )}
+                      onChange={() => {
+                        const next = !on
+                        return enqueueProviderUpdate({
+                          getSettings: () => useAppStore.getState().settings,
+                          fallbackSettings: settings,
+                          updateSettings,
+                          buildUpdate: (latest) =>
+                            buildNativeChatProviderUpdate(latest, agent, next)
+                        })
+                      }}
+                    />
                   </div>
-                  <ProviderDetail
-                    agent={agent}
-                    label={label}
-                    installed={detectedIds}
-                    enabledInAgents={enabledInAgents}
-                  />
-                  <SettingsSwitch
-                    checked={on}
-                    disabled={!enabledInAgents}
-                    ariaLabel={translate(
-                      'settings.chat.providers.toggleLabel',
-                      'Open {{value0}} as a chat',
-                      { value0: label }
-                    )}
-                    onChange={() => {
-                      const next = !on
-                      return enqueueProviderUpdate({
-                        getSettings: () => useAppStore.getState().settings,
-                        fallbackSettings: settings,
-                        updateSettings,
-                        buildUpdate: (latest) => buildNativeChatProviderUpdate(latest, agent, next)
-                      })
-                    }}
-                  />
+                  {/* Chats sign in on the host they run on, under the program that serves them. */}
+                  {agent === 'antigravity' && enabledInAgents ? (
+                    <AntigravityChatProviderSignIn />
+                  ) : null}
                 </div>
               )
             })}

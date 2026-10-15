@@ -15,7 +15,11 @@ import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { ManagedRuntimeInstallRow } from '../managed-runtime/ManagedRuntimeInstallRow'
 import { useAppStore } from '../../store'
-import { AntigravityChatSignInRow } from './AntigravityChatSignInRow'
+import {
+  AntigravityChatSignInRow,
+  antigravityChatSignInBlocked,
+  hostOffersAntigravityChatSignIn
+} from './AntigravityChatSignInRow'
 
 export function AntigravityAccountsSection({
   owner,
@@ -49,12 +53,6 @@ export function AntigravityAccountsSection({
   const nativeChat = useAppStore((s) => s.settings?.experimentalNativeChat === true)
   const chats = nativeChat && runtime !== 'wsl'
   const chatRuntime = useManagedRuntimeInstall(owner, 'antigravity', chats)
-  const chatHost =
-    nativeChat && ownerKind === 'local' && runtime !== 'wsl' ? window.api.platform.get() : null
-  const chatSignInAvailable =
-    chatHost !== null &&
-    (chatHost.platform === 'darwin' || chatHost.platform === 'linux') &&
-    (chatHost.arch === 'arm64' || chatHost.arch === 'x64')
 
   useEffect(() => {
     mounted.current = true
@@ -166,16 +164,6 @@ export function AntigravityAccountsSection({
           })}
         </p>
       </div>
-      {/* Chats sign in on the host itself, never in a WSL distro; a remote host's Google page returns
-          to that host, so remote sign-in waits for callback forwarding. */}
-      {chatSignInAvailable && (
-        <AntigravityChatSignInRow
-          owner={owner}
-          label={label}
-          saved={state?.chatSignIn?.saved === true}
-          onSettled={() => void run('List')}
-        />
-      )}
       <p className="text-xs text-muted-foreground">
         {translate(
           'accounts.antigravity.signIn',
@@ -305,25 +293,40 @@ export function AntigravityAccountsSection({
         )}
       </p>
       {chats && chatRuntime.kind === 'active' ? (
-        <ManagedRuntimeInstallRow
-          observation={chatRuntime}
-          agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
-        >
-          {(line, button) => (
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1 space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  {translate(
-                    'settings.chat.providers.antigravityDescription',
-                    'Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.'
-                  )}
-                </p>
-                {line}
+        <div className="space-y-3">
+          <ManagedRuntimeInstallRow
+            observation={chatRuntime}
+            agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
+          >
+            {(line, button) => (
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    {translate(
+                      'settings.chat.providers.antigravityDescription',
+                      'Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.'
+                    )}
+                  </p>
+                  {line}
+                </div>
+                {button}
               </div>
-              {button}
-            </div>
-          )}
-        </ManagedRuntimeInstallRow>
+            )}
+          </ManagedRuntimeInstallRow>
+          {hostOffersAntigravityChatSignIn(owner) ? (
+            <AntigravityChatSignInRow
+              owner={owner}
+              label={label}
+              description={translate(
+                'accounts.antigravity.chatDescription',
+                'Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.'
+              )}
+              saved={state?.chatSignIn?.saved === true}
+              disabled={antigravityChatSignInBlocked(chatRuntime)}
+              onSettled={() => void run('List')}
+            />
+          ) : null}
+        </div>
       ) : null}
     </section>
   )
