@@ -25,7 +25,12 @@ import { ManagedRuntimeInstallRow } from '../managed-runtime/ManagedRuntimeInsta
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitch } from './SettingsFormControls'
 import { getChatProvidersSearchEntry } from './chat-providers-search'
-import { AntigravityChatSignInRow, antigravityChatSignInBlocked } from './AntigravityChatSignInRow'
+import { antigravityChatSignInRunning } from '@/runtime/antigravity-chat-sign-in-status'
+import {
+  AntigravityChatSignInRow,
+  antigravityChatSignInBlocked,
+  useAntigravityChatSignIn
+} from './AntigravityChatSignInRow'
 import { getHostRuntimeLabel, getRuntimeSentenceLabel } from './accounts-pane-runtime'
 
 const enqueueProviderUpdate = createAgentSettingsUpdateQueue()
@@ -100,6 +105,12 @@ function ProviderDetail(props: {
   enabledInAgents: boolean
 }): React.JSX.Element {
   const runtime = useManagedRuntimeInstall(CHAT_HOST, props.agent, props.enabledInAgents)
+  // Install and Remove wait for a running sign-in, which runs the installed server.
+  const signIn = useAntigravityChatSignIn(
+    props.agent === 'antigravity' && props.enabledInAgents && runtime.kind === 'active'
+      ? CHAT_HOST
+      : null
+  )
   const summary = (line: React.ReactNode): React.JSX.Element => (
     <div className="min-w-0 flex-1">
       <div className="text-sm font-medium leading-none">{props.label}</div>
@@ -116,7 +127,11 @@ function ProviderDetail(props: {
     )
   }
   return (
-    <ManagedRuntimeInstallRow observation={runtime} agentLabel={props.label}>
+    <ManagedRuntimeInstallRow
+      observation={runtime}
+      agentLabel={props.label}
+      signInRunning={antigravityChatSignInRunning(signIn.flow)}
+    >
       {(line, button) => (
         <>
           {summary(line)}

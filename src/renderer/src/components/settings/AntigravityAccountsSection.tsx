@@ -15,10 +15,12 @@ import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { ManagedRuntimeInstallRow } from '../managed-runtime/ManagedRuntimeInstallRow'
 import { useAppStore } from '../../store'
+import { antigravityChatSignInRunning } from '@/runtime/antigravity-chat-sign-in-status'
 import {
   AntigravityChatSignInRow,
   antigravityChatSignInBlocked,
-  hostOffersAntigravityChatSignIn
+  hostOffersAntigravityChatSignIn,
+  useAntigravityChatSignIn
 } from './AntigravityChatSignInRow'
 
 export function AntigravityAccountsSection({
@@ -53,6 +55,8 @@ export function AntigravityAccountsSection({
   const nativeChat = useAppStore((s) => s.settings?.experimentalNativeChat === true)
   const chats = nativeChat && runtime !== 'wsl'
   const chatRuntime = useManagedRuntimeInstall(owner, 'antigravity', chats)
+  const chatSignIn = chats && chatRuntime.kind === 'active' && hostOffersAntigravityChatSignIn(owner)
+  const signIn = useAntigravityChatSignIn(chatSignIn ? owner : null)
 
   useEffect(() => {
     mounted.current = true
@@ -297,6 +301,7 @@ export function AntigravityAccountsSection({
           <ManagedRuntimeInstallRow
             observation={chatRuntime}
             agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
+            signInRunning={antigravityChatSignInRunning(signIn.flow)}
           >
             {(line, button) => (
               <div className="flex items-center justify-between gap-3">
@@ -313,7 +318,7 @@ export function AntigravityAccountsSection({
               </div>
             )}
           </ManagedRuntimeInstallRow>
-          {hostOffersAntigravityChatSignIn(owner) ? (
+          {chatSignIn ? (
             <AntigravityChatSignInRow
               owner={owner}
               label={label}
