@@ -101,7 +101,7 @@ export function createHarness(options: { maxPages?: number } = {}) {
       bind: vi.fn(() => {
         order.push('bind-guest')
       }),
-      release: vi.fn(() => {
+      release: vi.fn((_registration: BrowserRoutePageGuestIdentity) => {
         order.push('release-guest')
       })
     },
