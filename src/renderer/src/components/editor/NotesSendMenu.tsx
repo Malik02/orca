@@ -279,7 +279,6 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
                     launchSource="notes_send"
                     onPromptDelivered={() => markDelivered(scope.notes)}
                     onPromptHandedOff={holdInFlight(scope.notes)}
-                    closeMenu={() => handleOpenChange(false)}
                   />
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
@@ -298,7 +297,6 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
               }
             }}
             onPromptHandedOff={holdInFlight(defaultScope?.notes ?? [])}
-            closeMenu={() => handleOpenChange(false)}
           />
         )}
       </DropdownMenuContent>

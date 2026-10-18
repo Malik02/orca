@@ -47,8 +47,7 @@ export function ReviewNotesSendMenuContent({
   promptDelivery = 'submit-after-ready',
   launchSource = 'notes_send',
   onPromptDelivered,
-  onPromptHandedOff,
-  closeMenu
+  onPromptHandedOff
 }: {
   worktreeId: string
   groupId: string
@@ -58,7 +57,6 @@ export function ReviewNotesSendMenuContent({
   onPromptDelivered?: () => void
   /** Given each send's own result the moment its prompt is handed to an agent. */
   onPromptHandedOff?: (delivered: Promise<unknown>) => void
-  closeMenu?: () => void
 }): React.JSX.Element {
   const hasPrompt = prompt.trim().length > 0
 
@@ -216,7 +214,6 @@ export function ReviewNotesSendMenuContent({
         onPromptDelivered={onPromptDelivered}
         onPromptHandedOff={onPromptHandedOff}
         disabled={!hasPrompt}
-        closeMenu={closeMenu}
       />
     </>
   )

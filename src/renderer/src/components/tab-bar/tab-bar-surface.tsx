@@ -278,11 +278,7 @@ export function renderTabBarSurface({
           {showStaticCreateMenuItems && showAgentLaunchItems ? (
             <>
               <DropdownMenuSeparator />
-              <ProjectedAgentMenuItems
-                model={agentMenu}
-                runLaunch={launchAgentRow}
-                closeMenu={() => setNewTabMenuOpen(false)}
-              />
+              <ProjectedAgentMenuItems model={agentMenu} runLaunch={launchAgentRow} />
             </>
           ) : null}
         </DropdownMenuContent>

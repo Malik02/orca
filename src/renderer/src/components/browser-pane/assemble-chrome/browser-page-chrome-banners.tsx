@@ -163,7 +163,6 @@ export function BrowserPageChromeBanners({
                     prompt={browserAnnotationsPrompt}
                     onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                     onPromptHandedOff={handleBrowserAnnotationsHandedOff}
-                    closeMenu={() => handleAnnotationBannerSendOpenChange(false)}
                   />
                 </DropdownMenuContent>
               </DropdownMenu>

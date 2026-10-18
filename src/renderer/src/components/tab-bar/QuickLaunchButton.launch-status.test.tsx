@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type { ComponentProps, ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 import { cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredLaunchState } from '@/lib/structured-agent-session-launch-registry'
@@ -34,20 +34,21 @@ vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: ({ agent }: { agent: string }) => <span>{agent}</span>
 }))
 vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenuSub: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuSubContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuSubTrigger: ({ children, title, onClick }: ComponentProps<'button'>) => (
-    <button title={title} onClick={onClick}>
-      {children}
-    </button>
-  ),
   DropdownMenuItem: ({
     children,
     disabled,
     title,
+    onClick,
     onSelect
   }: { children: ReactNode } & DivProps) => (
-    <div aria-disabled={disabled ? 'true' : 'false'} title={title} onClick={onSelect}>
+    <div
+      aria-disabled={disabled ? 'true' : 'false'}
+      title={title}
+      onClick={(event) => {
+        onClick?.(event)
+        onSelect?.()
+      }}
+    >
       {children}
     </div>
   ),
@@ -65,7 +66,12 @@ vi.mock('sonner', () => ({
 }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: launchMock }))
 
-type DivProps = { disabled?: boolean; title?: string; onSelect?: () => void }
+type DivProps = {
+  disabled?: boolean
+  title?: string
+  onClick?: (event: MouseEvent<HTMLDivElement>) => void
+  onSelect?: () => void
+}
 
 import { QuickLaunchAgentMenuItems, ProjectedAgentMenuItems } from './QuickLaunchButton'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
@@ -255,7 +261,7 @@ describe('QuickLaunchAgentMenuItems launches', () => {
   })
 
   // Why: the notes menu holds what it sent until this result, so a second send leaves them out.
-  it('opens the CLI once with notes, then a click on the row starts a chat and closes the menu', async () => {
+  it('opens the CLI once with notes from the row button, then the row itself starts a chat', async () => {
     const model = vi.spyOn(menuRows, 'useNewTabAgentMenuRows').mockReturnValueOnce({
       state: 'settled',
       rows: [{ kind: 'chat', agent: 'codex', executionHostId: 'runtime:server' }],
@@ -275,7 +281,6 @@ describe('QuickLaunchAgentMenuItems launches', () => {
       promptDeliveryResult: delivery
     })
     const onPromptHandedOff = vi.fn()
-    const closeMenu = vi.fn()
 
     render(
       <QuickLaunchAgentMenuItems
@@ -285,11 +290,10 @@ describe('QuickLaunchAgentMenuItems launches', () => {
         prompt="review notes"
         promptDelivery="submit-after-ready"
         onPromptHandedOff={onPromptHandedOff}
-        closeMenu={closeMenu}
       />
     )
     model.mockRestore()
-    fireEvent.click(document.querySelector('[title="Launch Codex in a new terminal"]')!)
+    fireEvent.click(document.querySelector('button[title="Launch Codex in a new terminal"]')!)
 
     expect(launchMock).toHaveBeenCalledOnce()
     expect(launchMock.mock.calls[0][0]).toMatchObject({
@@ -308,7 +312,6 @@ describe('QuickLaunchAgentMenuItems launches', () => {
       requestedSurface: 'chat',
       selectedExecutionHostId: 'runtime:server'
     })
-    expect(closeMenu).toHaveBeenCalledOnce()
   })
 
   // The notes keep their text, so they are the one place that says it did not go.
