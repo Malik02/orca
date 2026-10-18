@@ -120,6 +120,15 @@ export class CodexSubagentExecutions {
 
   /** The child and every child it spawned, at any depth. */
   lineage(agentThreadId: string): CodexExecutionChild[] {
+    const spawnedByThread = new Map<string, string[]>()
+    for (const child of this.children.values()) {
+      if (child.spawnerThreadId === null) {
+        continue
+      }
+      const siblings = spawnedByThread.get(child.spawnerThreadId) ?? []
+      siblings.push(child.agentThreadId)
+      spawnedByThread.set(child.spawnerThreadId, siblings)
+    }
     const lineage: CodexExecutionChild[] = []
     const seen = new Set<string>()
     const pending = [agentThreadId]
@@ -130,10 +139,8 @@ export class CodexSubagentExecutions {
       }
       seen.add(id)
       lineage.push(child)
-      for (const spawned of this.children.values()) {
-        if (spawned.spawnerThreadId === id) {
-          pending.push(spawned.agentThreadId)
-        }
+      for (const spawned of spawnedByThread.get(id) ?? []) {
+        pending.push(spawned)
       }
     }
     return lineage

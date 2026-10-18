@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 
 describe('CodexSubagentExecutions retention and identity', () => {
@@ -26,6 +27,40 @@ describe('CodexSubagentExecutions retention and identity', () => {
     executions.observeTurn('child-0', 'turn-0', 'completed')
     expect(executions.find('child-0')).toBeDefined()
     expect(executions.workingChildren()).toHaveLength(199)
+  })
+
+  it('targets live descendants through settled ancestors without losing historical lineage order', () => {
+    const executions = new CodexSubagentExecutions()
+    executions.register('root', 'root', 'primary')
+    executions.observeTurn('root', 'root-turn', 'working')
+    const finished = Array.from({ length: 10_000 }, (_, index) => `finished-${index}`)
+    for (const id of finished) {
+      executions.register(id, id, 'root')
+      executions.observeTurn(id, `${id}-turn`, 'completed')
+    }
+    executions.register('settled-parent', 'settled parent', 'root')
+    executions.observeTurn('settled-parent', 'settled-turn', 'completed')
+    executions.register('live-descendant', 'live descendant', 'settled-parent')
+    executions.observeTurn('live-descendant', 'live-turn', 'working')
+    executions.register('sibling', 'sibling', 'root')
+    executions.observeTurn('sibling', 'sibling-turn', 'working')
+
+    expect(executions.lineage('root').map((child) => child.agentThreadId)).toEqual([
+      'root',
+      'sibling',
+      'settled-parent',
+      'live-descendant',
+      ...finished.toReversed()
+    ])
+    const tracker = new CodexBackgroundTaskTracker('primary', executions)
+    expect(tracker.subagentStopTargets(['root'])).toEqual({
+      turns: [
+        { threadId: 'root', turnId: 'root-turn' },
+        { threadId: 'sibling', turnId: 'sibling-turn' },
+        { threadId: 'live-descendant', turnId: 'live-turn' }
+      ],
+      terminals: []
+    })
   })
 
   it('collapses a label’s whitespace, and keeps the first label a child was given', () => {

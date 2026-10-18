@@ -3,6 +3,10 @@
 
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { HOOK_REQUEST_MAX_BYTES } from '../../shared/agent-hook-listener/request-body'
+import {
+  AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
+  AGENT_TYPE_MAX_LENGTH
+} from '../../shared/agent-status-field-normalization'
 
 // Module scope: post() reads the roster when a body is built, so a coalesced or
 // retried post always carries the children live at delivery.
@@ -13,13 +17,22 @@ export function getPiSubagentSnapshotSourceLines(): string[] {
     // Why: the host refuses an oversized body whole. Half its limit also keeps the roster under
     // the host's JSON structure-token limit; interpolated so it cannot drift from the host's.
     `const HOOK_BODY_BUDGET_BYTES = ${Math.floor(HOOK_REQUEST_MAX_BYTES / 2)}`,
-    "const SUBAGENTS_FIELD_BYTES = Buffer.byteLength(',\"subagents\":[]')",
+    'const SUBAGENTS_FIELD_BYTES = Buffer.byteLength(\',"subagents":[]\')',
     'let subagentRoster: SubagentRoster | null = null',
     '',
     // Why: an exited runner is already gone, and a pi-subagents workflow run is the lead
     // coordinating children that post their own rows; both still hold the pane.
     'function isVisibleSubagent(roster: SubagentRoster, id: string): boolean {',
     '  return roster.active.has(id) && !roster.exited?.has(id) && roster.details?.get(id)?.workflow !== true',
+    '}',
+    '',
+    // Match the host's bounded single-line previews before reserving body bytes.
+    'function subagentPreview(value: string | undefined, maxLength: number): string | undefined {',
+    "  if (typeof value !== 'string') return undefined",
+    "  let preview = value.slice(0, maxLength * 8 + 64).trimStart().replace(/[\\r\\n\\u2028\\u2029]+/g, ' ').slice(0, maxLength)",
+    '  if (preview.length < maxLength) preview = preview.trimEnd()',
+    '  else if (/[\\ud800-\\udbff]$/.test(preview)) preview = preview.slice(0, -1)',
+    '  return preview || undefined',
     '}',
     '',
     // Only the posted rows are fitted to the body; the active set keeps every child.
@@ -30,7 +43,9 @@ export function getPiSubagentSnapshotSourceLines(): string[] {
     '  for (const id of subagentRoster.active) {',
     '    if (!isVisibleSubagent(subagentRoster, id)) continue',
     '    const detail = subagentRoster.details?.get(id)',
-    "    const subagent = { id, state: 'working', startedAt: detail?.startedAt ?? 0, ...(detail?.agentType ? { agentType: detail.agentType } : {}), ...(detail?.description ? { description: detail.description } : {}) }",
+    `    const agentType = subagentPreview(detail?.agentType, ${AGENT_TYPE_MAX_LENGTH})`,
+    `    const description = subagentPreview(detail?.description, ${AGENT_STATUS_TOOL_INPUT_MAX_LENGTH})`,
+    "    const subagent = { id, state: 'working', startedAt: detail?.startedAt ?? 0, ...(agentType ? { agentType } : {}), ...(description ? { description } : {}) }",
     '    bytes += Buffer.byteLength(JSON.stringify(subagent)) + (subagents.length > 0 ? 1 : 0)',
     '    if (bytes > byteBudget) break',
     '    subagents.push(subagent)',

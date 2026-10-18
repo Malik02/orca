@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import {
+  HOOK_REQUEST_MAX_BYTES,
+  parseAgentHookJson
+} from '../../shared/agent-hook-listener/request-body'
+import { normalizeAgentSubagentsField } from '../../shared/agent-status-subagent-snapshot'
 import { createAgentStatusExtensionHarness } from './agent-status-extension-test-harness'
 import {
   agentEndCount,
@@ -317,6 +322,40 @@ describe('Pi child rows', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(childIds(posts(harness).at(-1))).toHaveLength(40)
+  })
+
+  it.each(['pi', 'omp'] as const)('fits %s children using the host previews', async (kind) => {
+    const harness = createAgentStatusExtensionHarness({ kind })
+    const children = [
+      {
+        id: 'run-a',
+        agentType: `\u2003${'a'.repeat(39)}🙂${'a'.repeat(100)}`,
+        description: `\ufeff \t${'d'.repeat(159)}🙂${'d'.repeat(300_000)}`
+      },
+      {
+        id: 'run-b',
+        agentType: ` \tReview\r\n\u2028  module\t\t${'a'.repeat(100)}`,
+        description: ` \tMap\r\n\u2029  module\t\t${'d'.repeat(300_000)}`
+      }
+    ]
+    await harness.callHook('agent_start')
+    for (const child of children) {
+      harness.emitPiEvent('task:subagent:lifecycle', {
+        ...child,
+        agent: child.agentType,
+        status: 'started'
+      })
+    }
+    await vi.advanceTimersByTimeAsync(0)
+
+    const body = String(harness.fetchMock.mock.calls.at(-1)?.[1]?.body)
+    expect(Buffer.byteLength(body)).toBeLessThanOrEqual(HOOK_REQUEST_MAX_BYTES)
+    expect(() => parseAgentHookJson(body)).not.toThrow()
+    expect(normalizeAgentSubagentsField(posts(harness).at(-1)?.subagents)).toEqual(
+      normalizeAgentSubagentsField(
+        children.map((child) => ({ ...child, state: 'working', startedAt: 0 }))
+      )?.map((child) => ({ ...child, startedAt: expect.any(Number) }))
+    )
   })
 
   it('posts nothing for the end of a run it is not tracking', async () => {
