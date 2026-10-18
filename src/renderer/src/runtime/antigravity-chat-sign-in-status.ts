@@ -1,4 +1,5 @@
 import type {
+  AntigravityChatAuth,
   AntigravityChatSignInState,
   AntigravityChatSignInStatus
 } from '../../../shared/antigravity-account-types'
@@ -14,14 +15,14 @@ import {
 
 /**
  * Each host's Antigravity chat sign-in, followed like an install's status: every Settings row for
- * a host shows the same flow and saved sign-in, one started or finished from another device too.
+ * a host shows the same flow and the server's last sign-in answer, from another client's flow too.
  */
 
 export type AntigravityChatSignInView = {
   /** Whether the host has answered; `readFailed` says nothing about the sign-in. */
   status: RevisionedHostSnapshot<AntigravityChatSignInStatus>['kind']
   flow: AntigravityChatSignInState | null
-  saved: boolean
+  auth: AntigravityChatAuth
   /** Why this client's last request failed; empty when it gave no reason. */
   error: string | null
   /** The browser could not open the link this client asked for. */
@@ -99,7 +100,7 @@ function openStartedLinks(): void {
 }
 signIns.subscribe(openStartedLinks)
 
-/** Starts a sign-in on the host, replacing any running one; the host's status shows it. */
+/** Starts a sign-in on the host, or rejoins this client's running one; the host's status shows it. */
 export async function startAntigravityChatSignIn(owner: RuntimeClientTarget): Promise<void> {
   const local = localFor(owner)
   const ticket = ++local.starts
@@ -118,10 +119,13 @@ export async function startAntigravityChatSignIn(owner: RuntimeClientTarget): Pr
   }
 }
 
+/** Only the client that started a flow is told its id, so only it can cancel or complete it. */
+const ownFlowId = (owner: RuntimeClientTarget): string | null => flowOf(owner)?.flowId ?? null
+
 export async function cancelAntigravityChatSignIn(owner: RuntimeClientTarget): Promise<void> {
-  const flow = flowOf(owner)
-  if (flow) {
-    await callAntigravityChatSignIn(owner, 'Cancel', { flowId: flow.flowId }).catch(
+  const flowId = ownFlowId(owner)
+  if (flowId) {
+    await callAntigravityChatSignIn(owner, 'Cancel', { flowId }).catch(
       (cause: unknown) => note(localFor(owner), { error: message(cause) })
     )
   }
@@ -133,11 +137,11 @@ export async function completeAntigravityChatSignIn(
   owner: RuntimeClientTarget,
   callbackUrl: string
 ): Promise<string | null> {
-  const flow = flowOf(owner)
-  if (!flow) {
+  const flowId = ownFlowId(owner)
+  if (!flowId) {
     return ''
   }
-  return callAntigravityChatSignIn(owner, 'Complete', { flowId: flow.flowId, callbackUrl }).then(
+  return callAntigravityChatSignIn(owner, 'Complete', { flowId, callbackUrl }).then(
     () => null,
     message
   )
@@ -168,7 +172,7 @@ export function readAntigravityChatSignIn(owner: RuntimeClientTarget): Antigravi
   const view = {
     status: snapshot.kind,
     flow: known?.flow ?? null,
-    saved: known?.saved ?? false,
+    auth: known?.auth ?? 'unknown',
     ...notes
   }
   views.set(hostKey(owner), { snapshot, notes, view })

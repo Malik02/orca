@@ -13,7 +13,10 @@ import {
   type AntigravityChatSignInView
 } from '@/runtime/antigravity-chat-sign-in-status'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { AntigravityChatSignInState } from '../../../../shared/antigravity-account-types'
+import type {
+  AntigravityChatAuth,
+  AntigravityChatSignInState
+} from '../../../../shared/antigravity-account-types'
 import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -21,7 +24,30 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
 type Flow = AntigravityChatSignInState
 
-function chatSignInLine(flow: Flow | null, saved: boolean, openFailed: boolean, host: string) {
+/** A running flow another client started: the host tells only its starter the id. */
+const otherClients = (flow: Flow | null): boolean => running(flow) && flow.flowId === null
+
+function authLine(auth: AntigravityChatAuth, host: string): string | null {
+  if (auth === 'signedIn') {
+    return translate('accounts.antigravity.chatSignedInOn', 'Signed in on {{host}}.', { host })
+  }
+  return auth === 'signedOut'
+    ? translate('accounts.antigravity.chatNotSignedIn', 'Not signed in on {{host}}.', { host })
+    : null
+}
+
+function chatSignInLine(
+  flow: Flow | null,
+  auth: AntigravityChatAuth,
+  openFailed: boolean,
+  host: string
+): string | null {
+  if (otherClients(flow)) {
+    return translate(
+      'accounts.antigravity.chatOtherClient',
+      'Sign-in is in progress in another client.'
+    )
+  }
   switch (flow?.phase) {
     case 'starting':
       return translate('accounts.antigravity.chatStarting', 'Starting sign-in…')
@@ -34,22 +60,20 @@ function chatSignInLine(flow: Flow | null, saved: boolean, openFailed: boolean, 
         : translate('accounts.antigravity.chatWaiting', 'Finish signing in in your browser.')
     case 'verifying':
       return translate('accounts.antigravity.chatVerifying', 'Finishing sign-in…')
-    case 'signedIn':
-      return translate('accounts.antigravity.chatSignedIn', 'Signed in.')
     case 'cancelled':
       return translate('accounts.antigravity.chatCancelled', 'Sign-in cancelled.')
     case 'expired':
       return translate('accounts.antigravity.chatExpired', 'Sign-in timed out. Try again.')
-    case 'failed':
-    case undefined:
-      // A saved file may since have been revoked, so this never claims the sign-in works.
-      return saved
-        ? translate('accounts.antigravity.chatSaved', 'Sign-in saved on {{host}}.', { host })
-        : translate('accounts.antigravity.chatSignedOut', 'Sign in on {{host}}.', { host })
+    default:
+      return authLine(auth, host)
   }
 }
 
-function signInButtonLabel(flow: Flow | null, saved: boolean, error: string | null): string {
+function signInButtonLabel(
+  flow: Flow | null,
+  auth: AntigravityChatAuth,
+  error: string | null
+): string {
   if (
     error ||
     flow?.phase === 'failed' ||
@@ -58,7 +82,7 @@ function signInButtonLabel(flow: Flow | null, saved: boolean, error: string | nu
   ) {
     return translate('accounts.antigravity.chatRetry', 'Retry sign-in')
   }
-  return flow?.phase === 'signedIn' || (!flow && saved)
+  return auth === 'signedIn'
     ? translate('accounts.antigravity.chatChangeAccount', 'Change account')
     : translate('accounts.antigravity.chatSignIn', 'Sign in')
 }
@@ -82,7 +106,7 @@ export function antigravityChatSignInBlocked(
 const NOT_FOLLOWED: AntigravityChatSignInView = {
   status: 'unknown',
   flow: null,
-  saved: false,
+  auth: 'unknown',
   error: null,
   openFailed: false
 }
@@ -171,7 +195,8 @@ export function AntigravityChatSignInRow(props: {
   disabled: boolean
 }): React.JSX.Element {
   const { owner, label } = props
-  const { status, flow, saved, openFailed, ...view } = useAntigravityChatSignIn(owner)
+  const { status, flow, auth, openFailed, ...view } = useAntigravityChatSignIn(owner)
+  const ownFlow = running(flow) && flow.flowId !== null
   // One start, cancel or paste at a time, so a double click asks the host once.
   const [pending, setPending] = useState(false)
   const act = (request: () => Promise<void>): void => {
@@ -202,9 +227,9 @@ export function AntigravityChatSignInRow(props: {
         <p className="text-xs text-muted-foreground">{props.description}</p>
         {/* The line keeps its height until the host answers, so nothing shifts when it does. */}
         <p role="status" className="min-h-4 text-xs text-muted-foreground">
-          {status === 'known' ? chatSignInLine(flow, saved, openFailed, label) : null}
+          {status === 'known' ? chatSignInLine(flow, auth, openFailed, label) : null}
         </p>
-        {flow?.phase === 'waiting' && flow.url && (
+        {ownFlow && flow?.phase === 'waiting' && flow.url && (
           <PastedAddressForm
             pending={pending}
             send={(callbackUrl, refused) =>
@@ -223,9 +248,9 @@ export function AntigravityChatSignInRow(props: {
           </p>
         )}
       </div>
-      {running(flow) ? (
+      {ownFlow ? (
         <div className="flex shrink-0 items-center gap-2">
-          {flow.url && (
+          {flow?.phase === 'waiting' && flow.url && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -253,10 +278,10 @@ export function AntigravityChatSignInRow(props: {
         <Button
           size="xs"
           variant="outline"
-          disabled={props.disabled || pending || status !== 'known'}
+          disabled={props.disabled || pending || status !== 'known' || otherClients(flow)}
           onClick={() => act(() => startAntigravityChatSignIn(owner))}
         >
-          {signInButtonLabel(flow, saved, error)}
+          {signInButtonLabel(flow, auth, error)}
         </Button>
       )}
     </div>
