@@ -112,6 +112,12 @@ export function ensureSharedNativeBuild({
     }
     log(`The shared ${moduleName} build at ${entryDir} is unusable (${reason}); replacing it.`)
   }
+  // node-gyp only compiles for the host OS; publishing that under another platform's name poisons the slot.
+  if (platform !== process.platform) {
+    throw new Error(
+      `cannot build ${moduleName} for ${platform} on ${process.platform}; build it on ${platform}`
+    )
+  }
 
   const workDir = mkdtempSync(join(tmpdir(), 'orca-native-build-'))
   try {

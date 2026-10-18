@@ -56,6 +56,20 @@ describe('ensureSharedNativeBuild', () => {
     })
     expect(result.entryDir).toBe(entryDir)
   })
+
+  it('refuses to compile for another platform', () => {
+    const otherPlatform = process.platform === 'linux' ? 'darwin' : 'linux'
+    expect(() =>
+      ensureSharedNativeBuild({
+        moduleName: 'node-pty',
+        packageDir: makePackage(),
+        platform: otherPlatform,
+        arch: 'x64',
+        checkBuildDir: () => null,
+        log: () => {}
+      })
+    ).toThrow(`cannot build node-pty for ${otherPlatform}`)
+  })
 })
 
 describe('checkNativeBuildDirArtifacts', () => {

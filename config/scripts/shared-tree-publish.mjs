@@ -31,6 +31,11 @@ export function publishSharedTree(stagingDir, entryDir, options) {
       rmSync(stagingDir, { recursive: true, force: true })
       return false
     }
+    // Why: the probe takes long enough for a sibling to publish; don't even briefly move theirs.
+    if (judged === null || treeIdentity(entryDir) !== judged) {
+      rmSync(stagingDir, { recursive: true, force: true })
+      return false
+    }
     quarantinePath = `${entryDir}.unusable-${process.pid}-${uuid()}`
     try {
       renameSync(entryDir, quarantinePath)
