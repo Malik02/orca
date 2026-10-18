@@ -5,6 +5,8 @@ export type StampOrderRow = {
   lastActivityAt?: number
   smartTier?: SmartTier
   smartAt?: number
+  /** The workspace unread flag: an agent finished while you were not looking. */
+  isUnread?: boolean
 }
 
 const TIER_RANK: Record<SmartTier, number> = { 'needs-you': 0, done: 1, working: 2 }
@@ -19,12 +21,16 @@ export function recentStamp(row: StampOrderRow): number {
   return finiteOr0(row.lastActivityAt)
 }
 
-// A tier a newer host knows and this client does not reads as Rest.
+// A tier a newer host knows and this client does not reads as Rest. Done holds only while unread:
+// opening the workspace clears the flag, and the next prompt moves the tier to Working.
 function tierRank(row: StampOrderRow): number {
-  return isSmartTier(row.smartTier) ? TIER_RANK[row.smartTier] : REST_RANK
+  if (!isSmartTier(row.smartTier) || (row.smartTier === 'done' && row.isUnread !== true)) {
+    return REST_RANK
+  }
+  return TIER_RANK[row.smartTier]
 }
 
-/** Smart by stamps: Needs you, Done, Working, each newest first; then Rest by Recent. */
+/** Smart by stamps: Needs you, unread Done, Working, each newest first; then Rest by Recent. */
 export function compareSmartStamps(a: StampOrderRow, b: StampOrderRow): number {
   const rankA = tierRank(a)
   const rankB = tierRank(b)

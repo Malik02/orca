@@ -79,6 +79,41 @@ export function compareWorktreeSortLabel(
   )
 }
 
+function worktreeSortReads(
+  repoMap: Map<string, Pick<Repo, 'displayName'>>,
+  labels: WorktreeSortLabels | undefined
+) {
+  return {
+    label: (worktree: Worktree): string => labels?.get(worktree) ?? getWorktreeSortLabel(worktree),
+    identity: getWorktreeHostIdentity,
+    repoLabel: (worktree: Worktree) => repoMap.get(worktree.repoId)?.displayName ?? '',
+    // Why fallback to sortOrder: existing users have a persisted smart-sort snapshot but no
+    // manualOrder yet, so Manual starts from that order instead of alphabetizing.
+    manualRank: (worktree: Worktree) => worktree.manualOrder ?? worktree.sortOrder
+  }
+}
+
+function buildStampComparator(
+  sortBy: SortBy,
+  repoMap: Map<string, Pick<Repo, 'displayName'>>,
+  labels: WorktreeSortLabels | undefined
+): (a: Worktree, b: Worktree) => number {
+  return buildWorkspaceRowComparator<Worktree>(sortBy, {
+    ...worktreeSortReads(repoMap, labels),
+    recentActivity: recentStamp,
+    compareSmart: compareSmartStamps
+  })
+}
+
+/** Sorts in place by the owning hosts' stamps, reading no clock: the order every stamp reader shares. */
+export function sortWorktreesByStamps<W extends Worktree>(
+  worktrees: W[],
+  sortBy: SortBy,
+  repoMap: Map<string, Pick<Repo, 'displayName'>>
+): W[] {
+  return worktrees.sort(buildStampComparator(sortBy, repoMap, buildWorktreeSortLabels(worktrees)))
+}
+
 /**
  * Build a comparator for sorting worktrees based on the current sort mode.
  *
@@ -95,24 +130,12 @@ export function buildWorktreeComparator(
   attentionByWorktree: Map<string, WorktreeAttention>,
   labels?: WorktreeSortLabels
 ): (a: Worktree, b: Worktree) => number {
-  const read = {
-    label: (worktree: Worktree): string => labels?.get(worktree) ?? getWorktreeSortLabel(worktree),
-    identity: getWorktreeHostIdentity,
-    repoLabel: (worktree: Worktree) => repoMap.get(worktree.repoId)?.displayName ?? '',
-    // Why fallback to sortOrder: existing users have a persisted smart-sort snapshot but no
-    // manualOrder yet, so Manual starts from that order instead of alphabetizing.
-    manualRank: (worktree: Worktree) => worktree.manualOrder ?? worktree.sortOrder
-  }
   // Switch point: Recent and Smart read the owning host's stamps, with no clock.
   if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-    return buildWorkspaceRowComparator<Worktree>(sortBy, {
-      ...read,
-      recentActivity: recentStamp,
-      compareSmart: compareSmartStamps
-    })
+    return buildStampComparator(sortBy, repoMap, labels)
   }
   return buildWorkspaceRowComparator<Worktree>(sortBy, {
-    ...read,
+    ...worktreeSortReads(repoMap, labels),
     recentActivity: (worktree) => effectiveRecentActivity(worktree, now),
     compareSmart: (a, b) => {
       const aw = attentionByWorktree.get(a.id) ?? IDLE
@@ -213,7 +236,7 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
   const labels = buildWorktreeSortLabels(worktrees)
   // Switch point: stamps need no cold phase, latch or attention map.
   if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-    worktrees.sort(buildWorktreeComparator(sortBy, args.repoMap, now, new Map(), labels))
+    worktrees.sort(buildStampComparator(sortBy, args.repoMap, labels))
     return { sorted: worktrees, attentionByWorktree: null, detectedLiveSmartSignal: false }
   }
   let detectedLiveSmartSignal = false

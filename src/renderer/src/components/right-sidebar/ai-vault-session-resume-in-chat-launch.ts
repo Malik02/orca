@@ -93,7 +93,7 @@ export async function resumeAiVaultSessionInNewChat(
 
 /** The first chat the worktree's host does not refuse to take the row over, trying them in order.
  *  A host that cannot answer yet keeps the chat it was asked about, whose own launch reports it. */
-async function adoptingAgentOnHost(
+export async function adoptingAgentOnHost(
   rowAgent: CliConversationRowAgent,
   worktreeId: string
 ): Promise<TuiAgent> {

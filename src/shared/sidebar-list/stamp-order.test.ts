@@ -8,13 +8,13 @@ function sortSmart(rows: Record<string, StampOrderRow>): string[] {
 }
 
 describe('stamp order', () => {
-  it('ranks Needs you, Done, Working, then Rest, each newest first', () => {
+  it('ranks Needs you, unread Done, Working, then Rest, each newest first', () => {
     expect(
       sortSmart({
         rest: { lastActivityAt: 900 },
         working: { lastActivityAt: 1, smartTier: 'working', smartAt: 50 },
-        doneOld: { lastActivityAt: 1, smartTier: 'done', smartAt: 10 },
-        doneNew: { lastActivityAt: 1, smartTier: 'done', smartAt: 20 },
+        doneOld: { lastActivityAt: 1, smartTier: 'done', smartAt: 10, isUnread: true },
+        doneNew: { lastActivityAt: 1, smartTier: 'done', smartAt: 20, isUnread: true },
         needsYou: { lastActivityAt: 1, smartTier: 'needs-you', smartAt: 5 },
         restOld: { lastActivityAt: 100 }
       })
@@ -40,9 +40,21 @@ describe('stamp order', () => {
   it('ties within a tier fall to Recent', () => {
     expect(
       sortSmart({
-        older: { lastActivityAt: 1, smartTier: 'done', smartAt: 5 },
-        newer: { lastActivityAt: 2, smartTier: 'done', smartAt: 5 }
+        older: { lastActivityAt: 1, smartTier: 'done', smartAt: 5, isUnread: true },
+        newer: { lastActivityAt: 2, smartTier: 'done', smartAt: 5, isUnread: true }
       })
     ).toEqual(['newer', 'older'])
+  })
+
+  it('a Done you have seen rests by Recent, below Working (owner decision Q1)', () => {
+    expect(
+      sortSmart({
+        seen: { lastActivityAt: 30, smartTier: 'done', smartAt: 30, isUnread: false },
+        working: { lastActivityAt: 1, smartTier: 'working', smartAt: 1 },
+        quiet: { lastActivityAt: 20 },
+        // An older row without the flag reads as seen.
+        noFlag: { lastActivityAt: 10, smartTier: 'done', smartAt: 40 }
+      })
+    ).toEqual(['working', 'seen', 'quiet', 'noFlag'])
   })
 })

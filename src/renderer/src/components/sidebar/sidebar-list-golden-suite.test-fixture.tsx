@@ -48,7 +48,7 @@ import {
 export const initialState = useAppStore.getInitialState()
 
 /** The WorktreeList row pipeline, hook for hook, without the virtualized viewport. */
-function useGoldenSidebarPipeline() {
+export function useGoldenSidebarPipeline() {
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const repos = useAppStore((s) => s.repos)

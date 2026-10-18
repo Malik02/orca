@@ -14,7 +14,10 @@ import {
   type PublishedWorkspaceLayout
 } from '../../../shared/workspace-layout/workspace-layout-published'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
-import { GIT_KEY } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
+import {
+  emptySession,
+  GIT_KEY
+} from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
@@ -396,6 +399,27 @@ describe('the window drawn from layout frames', () => {
     const tabs = store.getState().unifiedTabsByWorktree[GIT_KEY]!
     expect(tabs.find((tab) => tab.entityId === ownedId)).toMatchObject({ worktreeId: GIT_KEY })
     expect(tabs.every((tab) => tab.worktreeId === GIT_KEY)).toBe(true)
+    sync.close()
+  })
+
+  it('shows a workspace only main held (a CLI-started tab) once the window first opens it', async () => {
+    const store = createTestStore()
+    await bootWindowFromPartitions(store, [{ hostId: 'local', session: emptySession() }])
+    const sync = openWorkspaceLayoutFrameSync(store)
+    const layouts = published('local', localDesktopSession())
+    stream.onFrame!(snapshot(layouts))
+    sync.start()
+    await flushMicrotasks()
+    expect(store.getState().tabsByWorktree[GIT_KEY]).toBeUndefined()
+    // The first visit gives the workspace its empty root group; no frame arrives after it.
+    store.getState().ensureWorktreeRootGroup(GIT_KEY)
+    await flushMicrotasks()
+    // Exactly main's terminal tabs: the visit adds none of its own.
+    const mainTerminals = layouts[GIT_KEY]!.tabs.flatMap((tab) =>
+      tab.terminal ? [tab.entityId] : []
+    )
+    expect(mainTerminals).toContain('tab-shell')
+    expect(store.getState().tabsByWorktree[GIT_KEY]?.map((tab) => tab.id)).toEqual(mainTerminals)
     sync.close()
   })
 

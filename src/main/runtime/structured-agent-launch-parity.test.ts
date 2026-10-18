@@ -155,7 +155,16 @@ import {
 } from './structured-worker-identity'
 
 // A new agent goes last: its cases then shift only the configured ones' session ids.
-const AGENTS = ['claude', 'codex', 'grok', 'opencode', 'omp', 'pi', 'antigravity', 'opencode2'] as const
+const AGENTS = [
+  'claude',
+  'codex',
+  'grok',
+  'opencode',
+  'omp',
+  'pi',
+  'antigravity',
+  'opencode2'
+] as const
 type Agent = (typeof AGENTS)[number]
 
 /** What each fake binary prints for `--version`: a release every launch gate accepts. */

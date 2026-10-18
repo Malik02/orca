@@ -1,7 +1,7 @@
 // The window's layout slices drawn from main's layout stream (design phase E2b), in a layout-owner
 // build only. Main publishes every workspace it holds; this window shows a frame's workspace when
 // it writes that workspace to a partition this machine owns (a paired server's stay the mirror's)
-// and already holds it (startup restore keeps only workspaces the catalog knows).
+// and holds it (startup restore keeps only workspaces the catalog knows; a first visit adds one).
 //
 // A tab the window drew, closed or moved before main answered stays as drawn until the answer is
 // in (layout-owner-drawn-tab-holds); everything else shows as each frame arrives.
@@ -16,7 +16,11 @@ import {
   terminalLayoutsPatch
 } from '@/store/workspace-layout-frame-store-patch'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { pairedServerMirrors } from './paired-server-workspace'
+import {
+  framesDrawWorkspace,
+  layoutHoldsBoundPane,
+  onWorkspaceStartsDrawing
+} from './workspace-layout-frame-drawn-workspaces'
 import { splitWorkspaceSessionByHost } from '@/lib/workspace-session-host-split'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { TerminalTabTitleUpdate } from '@/store/slices/terminal-tab-title-batch'
@@ -48,6 +52,7 @@ import { subscribeRuntimeLayout } from './runtime-layout-client'
 type FrameSyncStore = {
   getState: () => AppState
   setState: (patch: Partial<AppState>) => void
+  subscribe: (listener: (state: AppState) => void) => () => void
 }
 
 export type WorkspaceLayoutFrameSync = LayoutFrameTerminalQueries & {
@@ -108,13 +113,6 @@ function liveTitleUpdates(
     }
   }
   return updates
-}
-
-/** Which workspaces frames draw: ones the window holds that no paired server mirrors. */
-function framesDrawWorkspace(state: AppState): (key: string) => boolean {
-  const mirrored = pairedServerMirrors(state)
-  return (key) =>
-    (key in state.groupsByWorktree || key in state.unifiedTabsByWorktree) && !mirrored(key)
 }
 
 export function openWorkspaceLayoutFrameSync(store: FrameSyncStore): WorkspaceLayoutFrameSync {
@@ -303,6 +301,14 @@ export function openWorkspaceLayoutFrameSync(store: FrameSyncStore): WorkspaceLa
     scheduleFlush()
   })
 
+  // A workspace only main held (a CLI-started tab) shows on the window's first visit, so the
+  // activation finds main's tab rather than seeding a second one.
+  const stopHeldWorkspacesListener = onWorkspaceStartsDrawing(
+    store,
+    () => Object.keys(cache).filter((key) => !(key in shown)),
+    () => streamOpen && scheduleFlush()
+  )
+
   return {
     start: () => {
       started = true
@@ -314,20 +320,15 @@ export function openWorkspaceLayoutFrameSync(store: FrameSyncStore): WorkspaceLa
     },
     close: () => {
       live = false
+      stopHeldWorkspacesListener()
       stopHeldTabsListener()
       stopReleaseListener()
       stream.close()
     },
     // Only a pane flush draws: the same workspaces it shows.
-    holdsTerminalPane: (worktreeId, { tabId, leafId, ptyId }) =>
+    holdsTerminalPane: (worktreeId, pane) =>
       framesDrawWorkspace(store.getState())(worktreeId) &&
-      (cache[worktreeId]?.tabs.some(
-        (tab) =>
-          tab.entityId === tabId &&
-          (tab.terminal?.panes.some((pane) => pane.leafId === leafId && pane.ptyId === ptyId) ??
-            false)
-      ) ??
-        false),
+      layoutHoldsBoundPane(cache[worktreeId], pane),
     // A closed stream's cache is frozen: main may have closed the tab since.
     terminalTab: (worktreeId, tabId) =>
       streamOpen

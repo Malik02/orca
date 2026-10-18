@@ -27,12 +27,12 @@ const GOLDEN_DIR = './__goldens__/sidebar-list-stamp-order'
 
 defineSidebarListGoldens(GOLDEN_DIR)
 
-// One row per tier and tie: two Done rows a second apart, two Working rows (the older one resumed
-// after an approval keeps the ask's time), and Rest rows that only Recent orders.
-const TIERS: Record<string, SmartStampFields> = {
+// One row per tier and tie: an unread Done and a seen one (which rests), two Working rows (the
+// older one resumed after an approval keeps the ask's time), and Rest rows that only Recent orders.
+const TIERS: Record<string, SmartStampFields & { isUnread?: boolean }> = {
   Zeta: { smartTier: 'needs-you', smartAt: GOLDEN_NOW - 600_000 },
-  'feat-a': { smartTier: 'done', smartAt: GOLDEN_NOW - 60_000 },
-  'api-y': { smartTier: 'done', smartAt: GOLDEN_NOW - 59_000 },
+  'feat-a': { smartTier: 'done', smartAt: GOLDEN_NOW - 60_000, isUnread: true },
+  'api-y': { smartTier: 'done', smartAt: GOLDEN_NOW - 59_000, isUnread: false },
   'remote-x': { smartTier: 'working', smartAt: GOLDEN_NOW - 30_000 },
   'gitlab-mr': { smartTier: 'working', smartAt: GOLDEN_NOW - 900_000 }
 }

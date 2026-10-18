@@ -6,7 +6,11 @@ import {
 } from '../../../src/shared/workspace-view/workspace-row-sort'
 import { compareCodePoints, compareSidebarText } from '../../../src/shared/sidebar-list/text-order'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
-import { compareSmartStamps, recentStamp } from '../../../src/shared/sidebar-list/stamp-order'
+import {
+  compareSmartStamps,
+  recentStamp,
+  type StampOrderRow
+} from '../../../src/shared/sidebar-list/stamp-order'
 
 function finiteOr(value: number | undefined, fallback: number): number {
   return value !== undefined && Number.isFinite(value) ? value : fallback
@@ -15,6 +19,16 @@ function finiteOr(value: number | undefined, fallback: number): number {
 function getManualSortRank(worktree: Worktree): number | null {
   const rank = worktree.manualOrder ?? worktree.sortOrder
   return typeof rank === 'number' && Number.isFinite(rank) ? rank : null
+}
+
+// The phone's row names the unread flag `unread`.
+function stampRow(worktree: Worktree): StampOrderRow {
+  return {
+    lastActivityAt: worktree.lastActivityAt,
+    smartTier: worktree.smartTier,
+    smartAt: worktree.smartAt,
+    isUnread: worktree.unread
+  }
 }
 
 export function hostSortsByStamps(worktrees: readonly Worktree[]): boolean {
@@ -39,7 +53,7 @@ export function sortWorktrees(
         repoLabel: (w) => w.repo,
         recentActivity: recentStamp,
         manualRank: getManualSortRank,
-        compareSmart: compareSmartStamps
+        compareSmart: (a, b) => compareSmartStamps(stampRow(a), stampRow(b))
       })
     )
   }

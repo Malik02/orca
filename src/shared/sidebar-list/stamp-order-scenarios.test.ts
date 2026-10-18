@@ -17,18 +17,25 @@ import { compareSmartStamps, recentStamp } from './stamp-order'
  * Every row of the before/after table in the sort-stamps design note, replayed through the host's
  * classifier and the stamp order every client sorts by.
  */
-type Row = { id: string; stamps: SortStamps; pane: AgentPaneState }
+type Row = { id: string; stamps: SortStamps; pane: AgentPaneState; unread: boolean }
 
 const T0 = 10_000_000
 
 class Host {
   readonly rows = new Map<string, Row>()
   now = T0
+  /** The workspace on screen: a finish there is seen, so it raises no unread flag. */
+  openId: string | null = null
 
   constructor(ids: string[]) {
     // Older rows were touched earlier: b before a, c before b, ...
     ids.forEach((id, index) => {
-      this.rows.set(id, { id, stamps: { recentAt: T0 - (index + 1) * 60_000 }, pane: REST_PANE })
+      this.rows.set(id, {
+        id,
+        stamps: { recentAt: T0 - (index + 1) * 60_000 },
+        pane: REST_PANE,
+        unread: false
+      })
     })
   }
 
@@ -44,6 +51,15 @@ class Host {
     }
     this.apply(row, { kind: 'agent', from: row.pane.phase, to: pane.phase, panes: [pane] })
     row.pane = pane
+    if (pane.phase === 'done' && id !== this.openId) {
+      row.unread = true
+    }
+  }
+
+  /** Opening a workspace clears its unread flag, as the window does. */
+  open(id: string): void {
+    this.openId = id
+    this.rows.get(id)!.unread = false
   }
 
   bell(id: string): void {
@@ -52,7 +68,7 @@ class Host {
 
   create(id: string): void {
     // Creation writes the first Recent stamp on the new record.
-    this.rows.set(id, { id, stamps: { recentAt: this.now }, pane: REST_PANE })
+    this.rows.set(id, { id, stamps: { recentAt: this.now }, pane: REST_PANE, unread: false })
   }
 
   order(sortBy: WorkspaceSortBy): string[] {
@@ -76,7 +92,8 @@ function view(row: Row) {
   return {
     lastActivityAt: row.stamps.recentAt,
     smartTier: row.stamps.smartTier,
-    smartAt: row.stamps.smartAt
+    smartAt: row.stamps.smartAt,
+    isUnread: row.unread
   }
 }
 
@@ -97,25 +114,55 @@ describe('sort stamps: the design note’s before/after table', () => {
     expect(both(host)).toEqual(before)
   })
 
-  it('an agent finishing a turn tops Recent and Done at once, and stays until the next prompt', () => {
+  it('a finish tops Recent and Done at once; Done holds while unread, with no fade', () => {
     const host = new Host(['a', 'b', 'c'])
+    host.agent('a', 'working')
+    host.advance(20_000)
     host.agent('c', 'working')
     host.advance(20_000)
     host.agent('c', 'done')
     expect(both(host)).toEqual({ recent: ['c', 'a', 'b'], smart: ['c', 'a', 'b'] })
-    // No fade: Done holds after any time without an event (owner decision Q1).
+    // No fade: an unread Done holds after any time without an event.
     host.advance(3 * 60 * 60_000)
     expect(host.order('smart')).toEqual(['c', 'a', 'b'])
   })
 
-  it('a finish in the open workspace moves it the same way; opening never stamps', () => {
+  it('opening the finished workspace ends Done; it rests by Recent (owner decision Q1)', () => {
+    const host = new Host(['a', 'b', 'c'])
+    host.agent('a', 'working')
+    host.advance(20_000)
+    host.agent('c', 'working')
+    host.advance(20_000)
+    host.agent('c', 'done')
+    host.open('c')
+    // Working a now outranks c, which leads the rest by its Recent stamp.
+    expect(both(host)).toEqual({ recent: ['c', 'a', 'b'], smart: ['a', 'c', 'b'] })
+  })
+
+  it('the next prompt ends Done: the row moves to Working', () => {
+    const host = new Host(['a', 'b', 'c'])
+    host.agent('a', 'working')
+    host.advance(20_000)
+    host.agent('c', 'working')
+    host.advance(20_000)
+    host.agent('c', 'done')
+    host.advance(20_000)
+    host.agent('c', 'working')
+    expect(host.rows.get('c')!.stamps.smartTier).toBe('working')
+    expect(host.order('smart')).toEqual(['c', 'a', 'b'])
+  })
+
+  it('a finish in the open workspace is seen: top of Recent, never Done; opening never stamps', () => {
     const host = new Host(['a', 'b'])
+    host.agent('a', 'working')
+    host.open('b')
     // Opening b is not an event, so nothing changes until its agent finishes.
     expect(both(host)).toEqual({ recent: ['a', 'b'], smart: ['a', 'b'] })
+    host.advance(20_000)
     host.agent('b', 'working')
     host.advance(20_000)
     host.agent('b', 'done')
-    expect(both(host)).toEqual({ recent: ['b', 'a'], smart: ['b', 'a'] })
+    expect(both(host)).toEqual({ recent: ['b', 'a'], smart: ['a', 'b'] })
   })
 
   it('an agent asking for approval tops Needs you at once', () => {

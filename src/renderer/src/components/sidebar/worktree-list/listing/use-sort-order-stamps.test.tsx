@@ -86,4 +86,25 @@ describe('useSidebarWorktreeSortOrder with the switch on', () => {
     rerender({ map: maps.after })
     expect(result.current).toEqual([z.id, a.id])
   })
+
+  it('a Done row drops to the rest once its workspace is read', () => {
+    const done = makeWorktree(`${repo.id}::/done`, 'done', {
+      repoId: repo.id,
+      lastActivityAt: 5,
+      smartTier: 'done',
+      smartAt: 5,
+      isUnread: true
+    })
+    const working = makeWorktree(`${repo.id}::/working`, 'working', {
+      repoId: repo.id,
+      lastActivityAt: 1,
+      smartTier: 'working',
+      smartAt: 1
+    })
+    useAppStore.setState({ worktreesByRepo: { [repo.id]: [done, working] } })
+    const { result } = renderHook(() => useSidebarWorktreeSortOrder({ repoMap, sortBy: 'smart' }))
+    expect(result.current).toEqual([done.id, working.id])
+    setRows([{ ...done, isUnread: false }, working])
+    expect(result.current).toEqual([working.id, done.id])
+  })
 })
