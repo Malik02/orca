@@ -391,6 +391,22 @@ describe('AgentStatusStore', () => {
     ).toBeNull()
   })
 
+  it('accepts a parent status whose subagent roster outgrows the status field limit', () => {
+    const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
+    const scopedSubject = subject()
+    const subagents = Array.from({ length: 2_000 }, (_, index) => ({
+      id: `a${index}`,
+      state: 'working' as const,
+      startedAt: 1,
+      description: 'x'.repeat(200)
+    }))
+    expect(
+      store.applyMutation({
+        parent: { subject: scopedSubject, status: status(scopedSubject, { subagents }) }
+      })
+    ).not.toBeNull()
+  })
+
   it('rejects malformed and scope-mismatched snapshots without changing state', () => {
     const { store } = populatedStore()
     const before = store.getSnapshot()
