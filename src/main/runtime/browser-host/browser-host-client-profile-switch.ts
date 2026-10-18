@@ -44,7 +44,7 @@ export async function switchBrowserHostClientProfile(
     placements: BrowserHostPagePlacementRegistry
     grants: Map<string, BrowserClientPageExecutionHostGrant>
     /** The client retired the old guest, so its transfers can never finish under the new generation. */
-    onCommitted?: (browserPageId: string) => void
+    onCommitted?: (browserPageId: string, replacedPageHostGeneration: number) => void
   }
 ) {
   const timeoutMs = clientPageCreationTimeout(input.timeoutMs)
@@ -121,7 +121,7 @@ export async function switchBrowserHostClientProfile(
       placement.pageHostGeneration
     )
     input.grants.set(authority.browserPageId, { ...grant, placement })
-    input.onCommitted?.(authority.browserPageId)
+    input.onCommitted?.(authority.browserPageId, expected.pageHostGeneration)
     return placement
   } catch (error) {
     input.placements.cancelClientPageReservation(reservation)

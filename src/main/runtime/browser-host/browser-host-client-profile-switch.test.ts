@@ -271,7 +271,7 @@ describe('negotiated profile switch over the command transport', () => {
     const released = vi.fn()
     const f = await fixture(true, released)
     await f.leases.switchClientPageProfile(f.authority, isolated)
-    expect(released).toHaveBeenCalledWith('page-a')
+    expect(released).toHaveBeenCalledWith('page-a', f.placement.pageHostGeneration)
     await f.h.executor.close()
   })
 

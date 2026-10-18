@@ -75,7 +75,8 @@ export class BrowserHostLeaseRegistry {
        * even when the client transport is already gone, so runtime-side per-page state (staged
        * download transfers) is not stranded.
        */
-      onClientPageReleased?: (browserPageId: string) => void
+      /** A generation limits the release to that page generation's resources. */
+      onClientPageReleased?: (browserPageId: string, pageHostGeneration?: number) => void
       /**
        * Called when a lease fence takes a client page's placement away. The page itself outlives
        * the host that placed it, so this hands the runtime its record back to retain rather than
