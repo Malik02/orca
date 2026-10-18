@@ -47,13 +47,16 @@ function buildModel(fetchGitHubItemsPage: () => Promise<unknown>) {
 
 let renderer: ReactTestRenderer | null = null
 let changePage: ((page: number) => Promise<void>) | null = null
+let canLoadUncountedNextPage = false
 
-function mount(model: ReturnType<typeof buildModel>): void {
+function mount(model: object): void {
   function Harness(): null {
-    changePage = useMobileTasksTaskPaginationActions(
+    const actions = useMobileTasksTaskPaginationActions(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture carries every member the page handler reads.
       model as unknown as TaskListLoadingModel
-    ).handleGitHubPageChange
+    )
+    changePage = actions.handleGitHubPageChange
+    canLoadUncountedNextPage = actions.githubCanLoadUncountedNextPage
     return null
   }
   act(() => {
@@ -104,5 +107,33 @@ describe('GitHub task page change', () => {
     expect(model.setGithubPages).not.toHaveBeenCalled()
     expect(model.setItems).not.toHaveBeenCalled()
     expect(model.setGithubPaginationLoading).toHaveBeenLastCalledWith(false)
+  })
+
+  describe('without a count, as in the default all-repos view', () => {
+    function rows(repoId: string, count: number) {
+      return Array.from({ length: count }, (_, index) => ({
+        key: `github:${repoId}:issue:${index}`,
+        source: { repoId }
+      }))
+    }
+
+    function lastPageOffersNext(page: ReturnType<typeof rows>): boolean {
+      const model = {
+        ...buildModel(async () => ({ items: [], failedCount: 0 })),
+        githubCountedTotalPages: null,
+        githubPages: [page],
+        selectedHostedRepos: [{ id: 'repo-a' }, { id: 'repo-b' }]
+      }
+      mount(model)
+      return canLoadUncountedNextPage
+    }
+
+    it('offers the next page when one repo filled its share and another did not', () => {
+      expect(lastPageOffersNext([...rows('repo-a', 36), ...rows('repo-b', 5)])).toBe(true)
+    })
+
+    it('offers no next page when no repo filled its share', () => {
+      expect(lastPageOffersNext([...rows('repo-a', 20), ...rows('repo-b', 5)])).toBe(false)
+    })
   })
 })

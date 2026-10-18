@@ -6,8 +6,23 @@ import {
   useCallback,
   useMemo
 } from './mobile-tasks-dependencies'
-import { buildPartialRepositoryNotice } from './mobile-tasks-legacy-foundation'
+import { type TaskItem, buildPartialRepositoryNotice } from './mobile-tasks-legacy-foundation'
 import { linearAccountConnect } from './mobile-task-list-operations'
+
+function hasRepoWithFullPage(
+  page: readonly Extract<TaskItem, { provider: 'github' }>[],
+  perRepoLimit: number
+): boolean {
+  const rowsByRepo = new Map<string, number>()
+  for (const item of page) {
+    const rows = (rowsByRepo.get(item.source.repoId) ?? 0) + 1
+    if (rows >= perRepoLimit) {
+      return true
+    }
+    rowsByRepo.set(item.source.repoId, rows)
+  }
+  return false
+}
 
 export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel) {
   const {
@@ -99,14 +114,15 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
   const githubTotalPages = githubCountedTotalPages
     ? Math.max(githubPages.length, githubCountedTotalPages)
     : githubPages.length
-  const githubPageCapacity =
-    getTaskPagePerRepoLimit(
-      selectedHostedRepos.length,
-      PER_REPO_FETCH_LIMIT,
-      CROSS_REPO_DISPLAY_LIMIT
-    ) * Math.max(1, selectedHostedRepos.length)
+  const githubPerRepoLimit = getTaskPagePerRepoLimit(
+    selectedHostedRepos.length,
+    PER_REPO_FETCH_LIMIT,
+    CROSS_REPO_DISPLAY_LIMIT
+  )
+  // Why: each repo pages on its own, so one repo that filled its share may have more; the default
+  // all-repos view skips the count, so this is its only way to reach page two.
   const githubCanLoadUncountedNextPage =
-    !githubCountedTotalPages && (githubPages.at(-1)?.length ?? 0) >= githubPageCapacity
+    !githubCountedTotalPages && hasRepoWithFullPage(githubPages.at(-1) ?? [], githubPerRepoLimit)
   const githubCanShowPagination =
     githubTotalPages > 1 || (githubPages.length > 0 && githubCanLoadUncountedNextPage)
   const githubPagePickerPages = useMemo(() => {
@@ -191,7 +207,6 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     connectLinearAccount,
     retryGitHubIssueSourceFetch,
     githubTotalPages,
-    githubPageCapacity,
     githubCanLoadUncountedNextPage,
     githubCanShowPagination,
     githubPagePickerPages,
