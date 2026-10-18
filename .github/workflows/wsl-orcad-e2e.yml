@@ -30,6 +30,7 @@ on:
       - 'pnpm-lock.yaml'
       - 'src/main/ssh/orcad-*'
       - 'src/main/managed-server/**'
+      - 'src/packages/process-host/**'
       # Unit tests never run in this lane; only the real distro test below does.
       - '!**/*.test.ts'
       - '!**/*.test.tsx'
