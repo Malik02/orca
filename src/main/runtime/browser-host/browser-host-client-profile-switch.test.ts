@@ -275,6 +275,33 @@ describe('negotiated profile switch over the command transport', () => {
     await f.h.executor.close()
   })
 
+  it('admits file transfers from the staged guest only while its switch is pending', async () => {
+    const f = await fixture()
+    const connection = (pageHostGeneration: number, admitPendingProfileSwitch?: boolean) =>
+      f.leases.requireClientPageConnection({
+        browserPageId: 'page-a',
+        placement: { ...f.placement, pageHostGeneration },
+        pairedDeviceId: f.authority.pairedDeviceId,
+        connectionId: f.authority.connectionId,
+        admitPendingProfileSwitch
+      })
+    let stagedGeneration = 0
+    f.bindReplacement.mockImplementation(({ registration }) => {
+      stagedGeneration = registration.pageHostGeneration
+      expect(connection(stagedGeneration, true)).toMatchObject({
+        pageHostGeneration: stagedGeneration
+      })
+      expect(() => connection(stagedGeneration)).toThrow('browser_page_placement_stale')
+    })
+    await f.leases.switchClientPageProfile(f.authority, isolated)
+    expect(f.bindReplacement).toHaveBeenCalledOnce()
+    expect(() => connection(f.placement.pageHostGeneration, true)).toThrow(
+      'browser_page_placement_stale'
+    )
+    expect(connection(stagedGeneration)).toMatchObject({ pageHostGeneration: stagedGeneration })
+    await f.h.executor.close()
+  })
+
   it('rejects arbitrary partition metadata instead of admitting a local cookie jar', () => {
     expect(() =>
       BrowserClientProfileMetadata.parse({

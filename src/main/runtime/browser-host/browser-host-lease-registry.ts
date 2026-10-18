@@ -1,5 +1,4 @@
 import { switchBrowserHostClientProfile } from './browser-host-client-profile-switch'
-import type { BrowserClientProfileMetadata } from '../../../shared/browser-client-profile-switch-protocol'
 import { randomUUID } from 'node:crypto'
 import type {
   BrowserClientHostCommandEvent,
@@ -152,6 +151,8 @@ export class BrowserHostLeaseRegistry {
     placement: RuntimeBrowserClientPlacement
     pairedDeviceId: string
     connectionId: string
+    /** File transfers only: a staged profile-switch guest downloads before its generation commits. */
+    admitPendingProfileSwitch?: boolean
   }): RuntimeBrowserClientPlacement {
     return requireBrowserClientPageConnection(input, {
       authorityRuntimeId: this.authorityRuntimeId,
@@ -214,19 +215,17 @@ export class BrowserHostLeaseRegistry {
     })
   }
 
-  async switchClientPageProfile(
+  switchClientPageProfile(
     authority: BrowserClientPageAuthority,
-    profile: BrowserClientProfileMetadata
+    profile: Parameters<typeof switchBrowserHostClientProfile>[1]
   ): Promise<RuntimeBrowserClientPlacement> {
-    const placement = await switchBrowserHostClientProfile(authority, profile, {
+    return switchBrowserHostClientProfile(authority, profile, {
       registry: this,
       state: (clientId) => this.requireLeaseState(this.select(clientId, [])),
       placements: this.pagePlacements,
-      grants: this.clientPageExecutionHostGrants
+      grants: this.clientPageExecutionHostGrants,
+      onCommitted: this.options.onClientPageReleased
     })
-    // The client retired the old guest, so its transfers can never finish under the new generation.
-    this.options.onClientPageReleased?.(authority.browserPageId)
-    return placement
   }
 
   requireClientPage(authority: BrowserClientPageAuthority): RuntimeBrowserClientPlacement {

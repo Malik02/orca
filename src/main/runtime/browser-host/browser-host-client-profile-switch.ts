@@ -4,6 +4,7 @@ import {
 } from '../../../shared/browser-client-profile-switch-protocol'
 import type { BrowserClientHostCommandResult } from '../../../shared/browser-client-host-protocol'
 import type { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
+import type { RuntimeBrowserClientPlacement } from '../../../shared/runtime-browser-placement'
 import type { BrowserHostLeaseState } from './browser-host-lease-records'
 import type {
   BrowserClientPageAuthority,
@@ -16,6 +17,23 @@ import {
   type BrowserClientPageExecutionHostGrant
 } from './browser-host-client-page-creation'
 
+const pendingByPlacements = new WeakMap<
+  BrowserHostPagePlacementRegistry,
+  Map<string, RuntimeBrowserClientPlacement>
+>()
+
+/** Replacement placements of switches still waiting on the client, by page. */
+export function pendingBrowserHostProfileSwitches(
+  placements: BrowserHostPagePlacementRegistry
+): Map<string, RuntimeBrowserClientPlacement> {
+  let pending = pendingByPlacements.get(placements)
+  if (!pending) {
+    pending = new Map()
+    pendingByPlacements.set(placements, pending)
+  }
+  return pending
+}
+
 export async function switchBrowserHostClientProfile(
   authority: BrowserClientPageAuthority,
   metadata: BrowserClientProfileMetadata,
@@ -25,6 +43,8 @@ export async function switchBrowserHostClientProfile(
     state: (clientId: string) => BrowserHostLeaseState
     placements: BrowserHostPagePlacementRegistry
     grants: Map<string, BrowserClientPageExecutionHostGrant>
+    /** The client retired the old guest, so its transfers can never finish under the new generation. */
+    onCommitted?: (browserPageId: string) => void
   }
 ) {
   const timeoutMs = clientPageCreationTimeout(input.timeoutMs)
@@ -73,6 +93,8 @@ export async function switchBrowserHostClientProfile(
       // A fenced lease or a newer reconciliation owns cleanup now.
     }
   }
+  const pending = pendingBrowserHostProfileSwitches(input.placements)
+  pending.set(authority.browserPageId, reservation.placement)
   try {
     const issued = ledger.issue({
       browserPageId: authority.browserPageId,
@@ -99,6 +121,7 @@ export async function switchBrowserHostClientProfile(
       placement.pageHostGeneration
     )
     input.grants.set(authority.browserPageId, { ...grant, placement })
+    input.onCommitted?.(authority.browserPageId)
     return placement
   } catch (error) {
     input.placements.cancelClientPageReservation(reservation)
@@ -125,5 +148,9 @@ export async function switchBrowserHostClientProfile(
       )
     }
     throw error
+  } finally {
+    if (pending.get(authority.browserPageId) === reservation.placement) {
+      pending.delete(authority.browserPageId)
+    }
   }
 }
