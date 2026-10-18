@@ -40,7 +40,7 @@
       "providers": {
         "title": "プロバイダー",
         "antigravityDescription": "Antigravity チャットは、Orca がこのホストにダウンロードするサーバーで動作します。agy CLI とは別です。",
-        "antigravitySignIn": "チャットはターミナルの agy アカウントとは別の、独自の Antigravity サインインを使用します。このデバイスで一度サインインしてください。"
+        "antigravityNotSignedIn": "サインインしていません。チャットには、ターミナルの agy アカウントとは別の Antigravity サインインが必要です。"
       }
     },
     "terminal": {
@@ -19235,12 +19235,13 @@
       "cancelFailed": "インストールをキャンセルできませんでした。もう一度お試しください。",
       "install": "{{agent}} をインストール",
       "installManaged": "Orca のコピーをインストール",
-      "installed": "インストール済みです。",
+      "installed": "インストール済み",
       "notInstalled": "インストールされていません。",
       "progress": "{{agent}} のダウンロード",
       "readFailed": "このホストの {{agent}} を確認できませんでした。再試行しています。",
-      "reinstall": "再インストール",
+      "reinstall": "{{agent}} を再インストール",
       "remove": "ダウンロードしたランタイムを削除",
+      "moreActions": "{{agent}}の追加操作",
       "removeConfirm": "削除",
       "removeDescription": "実行中の {{agent}} チャットは停止します。履歴は保持されます。",
       "removeKeep": "キャンセル",

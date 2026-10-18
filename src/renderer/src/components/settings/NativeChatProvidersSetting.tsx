@@ -26,11 +26,11 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitch } from './SettingsFormControls'
 import { getChatProvidersSearchEntry } from './chat-providers-search'
 import { antigravityChatSignInRunning } from '@/runtime/antigravity-chat-sign-in-status'
+import { useAntigravityChatSignIn } from './AntigravityChatSignInRow'
 import {
-  AntigravityChatSignInRow,
-  antigravityChatSignInBlocked,
-  useAntigravityChatSignIn
-} from './AntigravityChatSignInRow'
+  AntigravityProviderSignInArea,
+  antigravityProviderSignInShown
+} from './AntigravityProviderSignInArea'
 import { getHostRuntimeLabel, getRuntimeSentenceLabel } from './accounts-pane-runtime'
 
 const enqueueProviderUpdate = createAgentSettingsUpdateQueue()
@@ -132,10 +132,10 @@ function ProviderDetail(props: {
       agentLabel={props.label}
       signInRunning={antigravityChatSignInRunning(signIn.flow)}
     >
-      {(line, button) => (
+      {(line, actions) => (
         <>
           {summary(line)}
-          {button}
+          {actions}
         </>
       )}
     </ManagedRuntimeInstallRow>
@@ -145,22 +145,15 @@ function ProviderDetail(props: {
 /** Antigravity chats sign in on this computer, directly below the program they run. */
 function AntigravityChatProviderSignIn(): React.JSX.Element | null {
   const runtime = useManagedRuntimeInstall(CHAT_HOST, 'antigravity', true)
-  if (runtime.kind !== 'active') {
+  if (runtime.kind !== 'active' || !antigravityProviderSignInShown(runtime)) {
     return null
   }
-  // Indented to the provider's name, past its icon.
   return (
-    <div className="pl-10">
-      <AntigravityChatSignInRow
-        owner={CHAT_HOST}
-        label={getRuntimeSentenceLabel({ runtime: 'host', label: getHostRuntimeLabel() })}
-        description={translate(
-          'settings.chat.providers.antigravitySignIn',
-          'Chats use their own Antigravity sign-in, separate from your agy terminal account. Sign in once on this device.'
-        )}
-        disabled={antigravityChatSignInBlocked(runtime)}
-      />
-    </div>
+    <AntigravityProviderSignInArea
+      owner={CHAT_HOST}
+      label={getRuntimeSentenceLabel({ runtime: 'host', label: getHostRuntimeLabel() })}
+      install={runtime}
+    />
   )
 }
 

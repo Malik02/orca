@@ -303,7 +303,7 @@ export function AntigravityAccountsSection({
             agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
             signInRunning={antigravityChatSignInRunning(signIn.flow)}
           >
-            {(line, button) => (
+            {(line, actions) => (
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1 space-y-2">
                   <p className="text-xs text-muted-foreground">
@@ -314,7 +314,7 @@ export function AntigravityAccountsSection({
                   </p>
                   {line}
                 </div>
-                {button}
+                {actions}
               </div>
             )}
           </ManagedRuntimeInstallRow>

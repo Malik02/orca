@@ -217,7 +217,7 @@
         "install": "Install",
         "toggleLabel": "Open {{value0}} as a chat",
         "antigravityDescription": "Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.",
-        "antigravitySignIn": "Chats use their own Antigravity sign-in, separate from your agy terminal account. Sign in once on this device."
+        "antigravityNotSignedIn": "Not signed in. Chats need an Antigravity sign-in, separate from your agy terminal account."
       }
     },
     "terminal": {
@@ -19456,12 +19456,13 @@
       "cancelFailed": "Couldn't cancel the installation. Try again.",
       "install": "Install {{agent}}",
       "installManaged": "Install Orca's copy",
-      "installed": "Installed.",
+      "installed": "Installed",
       "notInstalled": "Not installed.",
       "progress": "{{agent}} download",
       "readFailed": "Could not check {{agent}} on this host. Retrying.",
-      "reinstall": "Reinstall",
+      "reinstall": "Reinstall {{agent}}",
       "remove": "Remove downloaded runtime",
+      "moreActions": "More actions for {{agent}}",
       "removeConfirm": "Remove",
       "removeDescription": "{{agent}} chats that are running stop. Their history is kept.",
       "removeKeep": "Cancel",

@@ -27,20 +27,19 @@ type Flow = AntigravityChatSignInState
 /** A running flow another client started: the host tells only its starter the id. */
 const otherClients = (flow: Flow | null): boolean => running(flow) && flow.flowId === null
 
-function authLine(auth: AntigravityChatAuth, host: string): string | null {
+function authLine(auth: AntigravityChatAuth, host: string, signedOut: string): string | null {
   if (auth === 'signedIn') {
     return translate('accounts.antigravity.chatSignedInOn', 'Signed in on {{host}}.', { host })
   }
-  return auth === 'signedOut'
-    ? translate('accounts.antigravity.chatNotSignedIn', 'Not signed in on {{host}}.', { host })
-    : null
+  return auth === 'signedOut' ? signedOut : null
 }
 
 function chatSignInLine(
   flow: Flow | null,
   auth: AntigravityChatAuth,
   openFailed: boolean,
-  host: string
+  host: string,
+  signedOut: string
 ): string | null {
   if (otherClients(flow)) {
     return translate(
@@ -63,18 +62,18 @@ function chatSignInLine(
     // A settled flow only stands in until the host answers whether it is signed in.
     case 'cancelled':
       return (
-        authLine(auth, host) ??
+        authLine(auth, host, signedOut) ??
         translate('accounts.antigravity.chatCancelled', 'Sign-in cancelled.')
       )
     case 'expired':
       return (
-        authLine(auth, host) ??
+        authLine(auth, host, signedOut) ??
         translate('accounts.antigravity.chatExpired', 'Sign-in timed out. Try again.')
       )
     case 'failed':
     case 'signedIn':
     case undefined:
-      return authLine(auth, host)
+      return authLine(auth, host, signedOut)
   }
 }
 
@@ -148,7 +147,7 @@ export function useAntigravityChatSignIn(
 
 /** Google's last page points at the host, which a browser on another computer can't reach, so its
  *  address is pasted here and the host passes it on. */
-function PastedAddressForm(props: {
+export function PastedAddressForm(props: {
   pending: boolean
   send: (callbackUrl: string, refused: (message: string) => void) => void
 }): React.JSX.Element {
@@ -203,17 +202,16 @@ function PastedAddressForm(props: {
   )
 }
 
-/** This execution host's sign-in for Antigravity chats, run by the host's own server. Every row
- *  for a host shows the same sign-in, a running one included. */
-export function AntigravityChatSignInRow(props: {
+/** One host's chat sign-in as both Settings layouts show it. `signedOut` is the line for a host
+ *  that answered it is not signed in. */
+export function useAntigravityChatSignInControls(props: {
   owner: RuntimeClientTarget
   label: string
-  description: string
+  signedOut: string
   disabled: boolean
-}): React.JSX.Element {
+}) {
   const { owner, label } = props
   const { status, flow, auth, openFailed, ...view } = useAntigravityChatSignIn(owner)
-  const ownFlow = running(flow) && flow.flowId !== null
   // One start, cancel or paste at a time, so a double click asks the host once.
   const [pending, setPending] = useState(false)
   const act = (request: () => Promise<void>): void => {
@@ -223,21 +221,61 @@ export function AntigravityChatSignInRow(props: {
   const copy = useClipboardTextCopyFeedback(flow?.url ?? '')
   const failed = translate('accounts.antigravity.chatFailed', 'Sign-in failed. Try again.')
   const error = view.error === null ? null : view.error || failed
-  const copyLabel = translate('accounts.antigravity.chatCopyLink', 'Copy sign-in link')
   const copyFailed = translate('accounts.antigravity.chatCopyFailed', 'Could not copy the link.')
   const readFailed = translate(
     'accounts.antigravity.chatReadFailed',
     'Could not check the sign-in on {{host}}.',
     { host: label }
   )
-  const alert =
-    error ??
-    (status === 'readFailed' ? readFailed : null) ??
-    (flow?.phase === 'failed' ? (flow.error ?? failed) : null) ??
-    (copy.status === 'failed' ? copyFailed : null)
-  const line = status === 'known' ? chatSignInLine(flow, auth, openFailed, label) : null
-  // Signed in, the button only switches account, so it steps back from the primary.
+  const ownFlow = running(flow) && flow.flowId !== null
   const action = signInAction(flow, auth, error)
+  return {
+    flow,
+    ownFlow,
+    /** The browser's link, while this client's sign-in waits on it. */
+    url: ownFlow && flow?.phase === 'waiting' ? (flow.url ?? null) : null,
+    line:
+      status === 'known' ? chatSignInLine(flow, auth, openFailed, label, props.signedOut) : null,
+    alert:
+      error ??
+      (status === 'readFailed' ? readFailed : null) ??
+      (flow?.phase === 'failed' ? (flow.error ?? failed) : null) ??
+      (copy.status === 'failed' ? copyFailed : null),
+    action,
+    actionLabel: SIGN_IN_ACTION_LABELS[action](),
+    pending,
+    copy,
+    copyLabel: translate('accounts.antigravity.chatCopyLink', 'Copy sign-in link'),
+    signInDisabled: props.disabled || pending || status !== 'known' || otherClients(flow),
+    start: () => act(() => startAntigravityChatSignIn(owner)),
+    cancel: () => act(() => cancelAntigravityChatSignIn(owner)),
+    send: (callbackUrl: string, refused: (message: string) => void) =>
+      act(async () => {
+        const refusal = await completeAntigravityChatSignIn(owner, callbackUrl)
+        if (refusal !== null) {
+          refused(refusal || failed)
+        }
+      })
+  }
+}
+
+/** This execution host's sign-in for Antigravity chats, run by the host's own server. Every row
+ *  for a host shows the same sign-in, a running one included. */
+export function AntigravityChatSignInRow(props: {
+  owner: RuntimeClientTarget
+  label: string
+  description: string
+  disabled: boolean
+}): React.JSX.Element {
+  const signIn = useAntigravityChatSignInControls({
+    owner: props.owner,
+    label: props.label,
+    signedOut: translate('accounts.antigravity.chatNotSignedIn', 'Not signed in on {{host}}.', {
+      host: props.label
+    }),
+    disabled: props.disabled
+  })
+  const { line, alert, copy, copyLabel, url } = signIn
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
@@ -259,9 +297,9 @@ export function AntigravityChatSignInRow(props: {
             )}
           </p>
         </div>
-        {ownFlow ? (
+        {signIn.ownFlow ? (
           <div className="flex shrink-0 items-center gap-2">
-            {flow?.phase === 'waiting' && flow.url && (
+            {url && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -276,39 +314,23 @@ export function AntigravityChatSignInRow(props: {
                 <TooltipContent>{copyLabel}</TooltipContent>
               </Tooltip>
             )}
-            <Button
-              size="xs"
-              variant="ghost"
-              disabled={pending}
-              onClick={() => act(() => cancelAntigravityChatSignIn(owner))}
-            >
+            <Button size="xs" variant="ghost" disabled={signIn.pending} onClick={signIn.cancel}>
               {translate('accounts.antigravity.chatCancel', 'Cancel')}
             </Button>
           </div>
         ) : (
           <Button
             size="xs"
-            variant={action === 'changeAccount' ? 'outline' : 'default'}
-            disabled={props.disabled || pending || status !== 'known' || otherClients(flow)}
-            onClick={() => act(() => startAntigravityChatSignIn(owner))}
+            // Signed in, the button only switches account, so it steps back from the primary.
+            variant={signIn.action === 'changeAccount' ? 'outline' : 'default'}
+            disabled={signIn.signInDisabled}
+            onClick={signIn.start}
           >
-            {SIGN_IN_ACTION_LABELS[action]()}
+            {signIn.actionLabel}
           </Button>
         )}
       </div>
-      {ownFlow && flow?.phase === 'waiting' && flow.url && (
-        <PastedAddressForm
-          pending={pending}
-          send={(callbackUrl, refused) =>
-            act(async () => {
-              const refusal = await completeAntigravityChatSignIn(owner, callbackUrl)
-              if (refusal !== null) {
-                refused(refusal || failed)
-              }
-            })
-          }
-        />
-      )}
+      {url && <PastedAddressForm pending={signIn.pending} send={signIn.send} />}
     </div>
   )
 }
