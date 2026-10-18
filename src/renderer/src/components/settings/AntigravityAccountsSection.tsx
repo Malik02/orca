@@ -297,7 +297,7 @@ export function AntigravityAccountsSection({
         )}
       </p>
       {chats && chatRuntime.kind === 'active' ? (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <ManagedRuntimeInstallRow
             observation={chatRuntime}
             agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
@@ -318,17 +318,15 @@ export function AntigravityAccountsSection({
               </div>
             )}
           </ManagedRuntimeInstallRow>
-          {chatSignIn ? (
-            <AntigravityChatSignInRow
-              owner={owner}
-              label={label}
-              description={translate(
-                'accounts.antigravity.chatDescription',
-                'Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.'
-              )}
-              disabled={antigravityChatSignInBlocked(chatRuntime)}
-            />
-          ) : null}
+          <AntigravityChatSignInRow
+            owner={owner}
+            label={label}
+            description={translate(
+              'accounts.antigravity.chatDescription',
+              'Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.'
+            )}
+            disabled={antigravityChatSignInBlocked(chatRuntime)}
+          />
         </div>
       ) : null}
     </section>

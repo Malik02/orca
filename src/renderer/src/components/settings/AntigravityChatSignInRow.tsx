@@ -76,22 +76,28 @@ function chatSignInLine(
   }
 }
 
-function signInButtonLabel(
+type SignInAction = 'retry' | 'changeAccount' | 'signIn'
+
+function signInAction(
   flow: Flow | null,
   auth: AntigravityChatAuth,
   error: string | null
-): string {
+): SignInAction {
   if (
     error ||
     flow?.phase === 'failed' ||
     flow?.phase === 'cancelled' ||
     flow?.phase === 'expired'
   ) {
-    return translate('accounts.antigravity.chatRetry', 'Retry sign-in')
+    return 'retry'
   }
-  return auth === 'signedIn'
-    ? translate('accounts.antigravity.chatChangeAccount', 'Change account')
-    : translate('accounts.antigravity.chatSignIn', 'Sign in')
+  return auth === 'signedIn' ? 'changeAccount' : 'signIn'
+}
+
+const SIGN_IN_ACTION_LABELS: Record<SignInAction, () => string> = {
+  retry: () => translate('accounts.antigravity.chatRetry', 'Retry sign-in'),
+  changeAccount: () => translate('accounts.antigravity.chatChangeAccount', 'Change account'),
+  signIn: () => translate('accounts.antigravity.chatSignIn', 'Sign in')
 }
 
 const SETTLED_OPERATION_PHASES = new Set(['succeeded', 'failed', 'cancelled'])
@@ -153,7 +159,7 @@ function PastedAddressForm(props: {
   return (
     <form
       noValidate
-      className="space-y-1 pt-1"
+      className="space-y-1"
       onSubmit={(event) => {
         event.preventDefault()
         if (callbackUrl) {
@@ -227,71 +233,79 @@ export function AntigravityChatSignInRow(props: {
     (status === 'readFailed' ? readFailed : null) ??
     (flow?.phase === 'failed' ? (flow.error ?? failed) : null) ??
     (copy.status === 'failed' ? copyFailed : null)
+  const line = status === 'known' ? chatSignInLine(flow, auth, openFailed, label) : null
+  // Signed in, the button only switches account, so it steps back from the primary.
+  const action = signInAction(flow, auth, error)
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border p-3">
-      <div className="min-w-0 flex-1 space-y-1">
-        <p className="text-xs font-medium">
-          {translate('accounts.antigravity.chatTitle', 'Antigravity chats')}
-        </p>
-        <p className="text-xs text-muted-foreground">{props.description}</p>
-        {/* The line keeps its height until the host answers, so nothing shifts when it does. */}
-        <p role="status" className="min-h-4 text-xs text-muted-foreground">
-          {status === 'known' ? chatSignInLine(flow, auth, openFailed, label) : null}
-        </p>
-        {ownFlow && flow?.phase === 'waiting' && flow.url && (
-          <PastedAddressForm
-            pending={pending}
-            send={(callbackUrl, refused) =>
-              act(async () => {
-                const refusal = await completeAntigravityChatSignIn(owner, callbackUrl)
-                if (refusal !== null) {
-                  refused(refusal || failed)
-                }
-              })
-            }
-          />
-        )}
-        {alert && (
-          <p role="alert" className="text-xs text-destructive">
-            {alert}
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium leading-none">
+            {translate('accounts.antigravity.chatTitle', 'Antigravity chats')}
           </p>
-        )}
-      </div>
-      {ownFlow ? (
-        <div className="flex shrink-0 items-center gap-2">
-          {flow?.phase === 'waiting' && flow.url && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label={copyLabel}
-                  onClick={() => void copy.copyText()}
-                >
-                  {copy.status === 'copied' ? <Check /> : <Copy />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{copyLabel}</TooltipContent>
-            </Tooltip>
-          )}
+          {props.description ? (
+            <p className="mt-1 text-xs text-muted-foreground">{props.description}</p>
+          ) : null}
+          {/* The line keeps its height until the host answers, so nothing shifts when it does. */}
+          <p role="status" className="mt-1 min-h-4 break-words text-xs text-muted-foreground">
+            {line}
+            {line && alert ? ' ' : null}
+            {alert && (
+              <span role="alert" className="text-destructive">
+                {alert}
+              </span>
+            )}
+          </p>
+        </div>
+        {ownFlow ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {flow?.phase === 'waiting' && flow.url && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    aria-label={copyLabel}
+                    onClick={() => void copy.copyText()}
+                  >
+                    {copy.status === 'copied' ? <Check /> : <Copy />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{copyLabel}</TooltipContent>
+              </Tooltip>
+            )}
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={pending}
+              onClick={() => act(() => cancelAntigravityChatSignIn(owner))}
+            >
+              {translate('accounts.antigravity.chatCancel', 'Cancel')}
+            </Button>
+          </div>
+        ) : (
           <Button
             size="xs"
-            variant="ghost"
-            disabled={pending}
-            onClick={() => act(() => cancelAntigravityChatSignIn(owner))}
+            variant={action === 'changeAccount' ? 'outline' : 'default'}
+            disabled={props.disabled || pending || status !== 'known' || otherClients(flow)}
+            onClick={() => act(() => startAntigravityChatSignIn(owner))}
           >
-            {translate('accounts.antigravity.chatCancel', 'Cancel')}
+            {SIGN_IN_ACTION_LABELS[action]()}
           </Button>
-        </div>
-      ) : (
-        <Button
-          size="xs"
-          variant="outline"
-          disabled={props.disabled || pending || status !== 'known' || otherClients(flow)}
-          onClick={() => act(() => startAntigravityChatSignIn(owner))}
-        >
-          {signInButtonLabel(flow, auth, error)}
-        </Button>
+        )}
+      </div>
+      {ownFlow && flow?.phase === 'waiting' && flow.url && (
+        <PastedAddressForm
+          pending={pending}
+          send={(callbackUrl, refused) =>
+            act(async () => {
+              const refusal = await completeAntigravityChatSignIn(owner, callbackUrl)
+              if (refusal !== null) {
+                refused(refusal || failed)
+              }
+            })
+          }
+        />
       )}
     </div>
   )
