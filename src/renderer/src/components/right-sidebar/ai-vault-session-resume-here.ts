@@ -70,13 +70,7 @@ export function resumeAiVaultSessionHere(args: {
     if (structured.workspaceId !== here.workspaceId) {
       return false
     }
-    replace = () =>
-      activateAiVaultStructuredSession(session).then(() => {
-        // It also settles true after a reopen it could only report, so only a tab that exists replaces.
-        if (findChatTabWhere(here.workspaceId, (tab) => tab.entityId === structured.sessionId)) {
-          closeReplacedChat(here)
-        }
-      })
+    replace = () => revealInPlaceOf(here, structured)
   } else if (
     actions.resumeInNewChatWorkspaceId === here.workspaceId &&
     adoptsCliConversations(session.agent)
@@ -141,10 +135,17 @@ function resumeInPlaceOf(
           settlement?.kind === 'failed'
             ? structuredLaunchConversationOwner(settlement.error)
             : undefined
+        let ownerShown: Promise<unknown> | undefined
         if (owner && owner.sessionId === findChatTab(here)?.entityId) {
           here.dismiss()
         } else if (owner) {
-          void activateAiVaultStructuredSession({ structuredSession: owner })
+          // An owner open in another tab is switched to; a closed one reopens in this chat's place.
+          const elsewhere =
+            owner.workspaceId !== here.workspaceId ||
+            findChatTabWhere(owner.workspaceId, (tab) => tab.entityId === owner.sessionId)
+          ownerShown = elsewhere
+            ? activateAiVaultStructuredSession({ structuredSession: owner })
+            : revealInPlaceOf(here, owner)
         }
         if (settlement?.kind === 'structured') {
           closeReplacedChat(here)
@@ -153,12 +154,25 @@ function resumeInPlaceOf(
           // replace. An unknown outcome keeps both: that tab has its own badge and Retry.
           useAppStore.getState().closeUnifiedTab(openedTabId)
         }
-        resolve()
+        void Promise.resolve(ownerShown).then(resolve, resolve)
         return owner !== undefined
       }
     }
   )
   return settled
+}
+
+/** Reopens a closed chat in place of this one, which closes only once the reopened tab exists. */
+function revealInPlaceOf(
+  here: AiVaultResumeHere,
+  structured: NonNullable<AiVaultSession['structuredSession']>
+): Promise<void> {
+  return activateAiVaultStructuredSession({ structuredSession: structured }).then(() => {
+    // It also settles true after a reopen it could only report, so only a tab that exists replaces.
+    if (findChatTabWhere(here.workspaceId, (tab) => tab.entityId === structured.sessionId)) {
+      closeReplacedChat(here)
+    }
+  })
 }
 
 function findChatTabWhere(workspaceId: string, matches: (tab: Tab) => boolean): Tab | undefined {

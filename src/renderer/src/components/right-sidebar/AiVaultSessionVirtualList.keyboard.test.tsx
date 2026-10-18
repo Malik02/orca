@@ -68,6 +68,28 @@ vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: vi.fn()
 }))
+// Opening a chat by id: switches to its tab, or the host republishes a closed one as a new tab.
+vi.mock('@/lib/activate-ai-vault-structured-session', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  activateAiVaultStructuredSession: vi.fn(
+    async ({
+      structuredSession: s
+    }: {
+      structuredSession: { sessionId: string; workspaceId: string }
+    }) => {
+      const tabs = useAppStore.getState().unifiedTabsByWorktree[s.workspaceId] ?? []
+      if (!tabs.some((tab) => tab.entityId === s.sessionId)) {
+        useAppStore.getState().createUnifiedTab(s.workspaceId, 'agent-session', {
+          id: s.sessionId,
+          entityId: s.sessionId,
+          executionHostId: LOCAL_EXECUTION_HOST_ID,
+          agentSessionAgent: 'claude'
+        })
+      }
+      return true
+    }
+  )
+}))
 
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
 
@@ -305,33 +327,46 @@ describe('Session History keyboard selection', () => {
     launch.sessionId = 'new'
   })
 
-  it('closes the picker, with no error, when the host says this chat already holds the row', async () => {
+  it('follows the chat the host says holds the row: this one, another open one, or a closed one', async () => {
     const workspaceId = 'repo-1::/repo'
     useAppStore.setState(useAppStore.getInitialState(), true)
     useAppStore.setState({ activeWorktreeId: workspaceId })
-    useAppStore.getState().createUnifiedTab(workspaceId, 'agent-session', {
-      id: 'old',
-      entityId: 'old',
-      executionHostId: LOCAL_EXECUTION_HOST_ID,
-      agentSessionAgent: 'claude'
-    })
-    // A row listed before the takeover carries no link; only the host's refusal names the owner.
-    const owner = { sessionId: 'old', workspaceId }
-    const refusal = {
-      code: 'agent_session_conflict',
-      details: { reason: 'conversationHeldElsewhere', owner }
+    for (const id of ['old', 'other']) {
+      useAppStore.getState().createUnifiedTab(workspaceId, 'agent-session', {
+        id,
+        entityId: id,
+        executionHostId: LOCAL_EXECUTION_HOST_ID,
+        agentSessionAgent: 'claude'
+      })
     }
-    launch.settlement = { kind: 'failed', error: Object.assign(new Error('refused'), { refusal }) }
+    const order = () => useAppStore.getState().groupsByWorktree[workspaceId]?.[0]?.tabOrder
     const dismiss = vi.fn()
     const { press } = renderList({
       resumeHere: { tabId: 'old', workspaceId, agent: 'claude', dismiss, confirm: vi.fn() }
     })
-    press('Enter')
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+    // A row listed before the takeover carries no link; only the host's refusal names the owner.
+    const refusedBy = async (sessionId: string) => {
+      const refusal = {
+        code: 'agent_session_conflict',
+        details: { reason: 'conversationHeldElsewhere', owner: { sessionId, workspaceId } }
+      }
+      launch.settlement = {
+        kind: 'failed',
+        error: Object.assign(new Error('refused'), { refusal })
+      }
+      press('Enter')
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    }
+    await refusedBy('old')
     expect(dismiss).toHaveBeenCalledOnce()
+    await refusedBy('other')
+    expect(order()).toEqual(['old', 'other'])
+    // The closed chat that holds the row reopens in this one's place.
+    await refusedBy('held')
+    expect(order()).toEqual(['other', 'held'])
     expect(toastError).not.toHaveBeenCalled()
-    expect(useAppStore.getState().groupsByWorktree[workspaceId]?.[0]?.tabOrder).toEqual(['old'])
+    launch.settlement = { kind: 'structured', sessionId: 'new' }
   })
 })
