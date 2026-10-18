@@ -168,6 +168,8 @@ overrides:
 
 packageExtensionsChecksum: sha256-lRR6RFjKDBu1Uebv60XTm5nG1flPIwU9N1yUzaPaHRg=
 
+pnpmfileChecksum: sha256-IJ43EmCuCA4RqFCuwxlXlIUSrR/xi8iEEQHdaoCpo2E=
+
 patchedDependencies:
   '@vscode/windows-process-tree@0.8.0': a09f2e8b2b4e73ef20c317af91f9e06c09abf62fa2c891d99b16f53047f596fd
   '@xterm/addon-image@0.10.0-beta.301': f088c9207dac42844a542b9da8078be52351cee60585725ef189b9fd30f33f34
