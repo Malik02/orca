@@ -33,6 +33,8 @@ const { assertWindowsProcessTreeCreationTime } = require('./windows-process-tree
 const scriptPath = import.meta.filename
 const projectDir = resolve(import.meta.dirname, '../..')
 const runtime = readRuntimeArg()
+// Why: `pnpm rebuild:node` must rebuild even a loadable node-pty; a shared slot still reuses its usable entry.
+const forceRebuild = process.argv.includes('--force')
 
 const NATIVE_MODULES = [
   'node-pty',
@@ -80,12 +82,14 @@ function readRuntimeArg() {
 function ensureNodeRuntime() {
   const initial = runNodeCheck()
   const patchedNodePtyRebuildReason = getPatchedNodePtyRebuildReason()
-  if (initial.ok && !patchedNodePtyRebuildReason) {
+  if (initial.ok && !patchedNodePtyRebuildReason && !forceRebuild) {
     return
   }
 
-  if (patchedNodePtyRebuildReason) {
-    console.warn(`[native-runtime] ${patchedNodePtyRebuildReason}`)
+  if (patchedNodePtyRebuildReason || forceRebuild) {
+    console.warn(
+      `[native-runtime] ${patchedNodePtyRebuildReason ?? 'Forced rebuild of node-pty for Node.'}`
+    )
     if (!initial.ok) {
       printCheckError(initial)
     }
