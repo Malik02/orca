@@ -149,8 +149,10 @@ function PastedAddressForm(props: {
   const [refusal, setRefusal] = useState<string | null>(null)
   const helpId = useId()
   const callbackUrl = pasted.trim()
+  // noValidate: the browser's URL check would pre-empt the host's refusal, which says what's wrong.
   return (
     <form
+      noValidate
       className="space-y-1 pt-1"
       onSubmit={(event) => {
         event.preventDefault()
