@@ -25,8 +25,6 @@ export type ObservedAgentStatusPaneIdentity =
       processIncarnation: string
       /** The orchestration dispatch that owned the pane then, not whichever owns it now. */
       dispatchId: string | null
-      /** Local conversations this execution reported, so a later row cannot hide the pane. */
-      conversations?: ReadonlyMap<string, { agent: string; id: string; paneOwned: boolean }>
     }
   /** No status arrival was seen for this pane in this runtime: a hydrated replay row, or one
    *  reconciled from it. Those carry `restoredUnconfirmed` and never project `live`. */

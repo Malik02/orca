@@ -3,17 +3,25 @@ import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { AgentProcessVerdict } from '../../shared/agent-process-presence'
 import type { CliWriterObservation } from '../agent-hooks/server/cli-writer-observation'
 import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
+import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server/server-types'
 import {
   assertCliConversationWritersExited,
   posixCliWriterShellAlone,
   type CliWriterHost
 } from './structured-agent-cli-writers'
-import { AgentStatusObservedPaneIdentities } from './agent-status-observed-pane-identity'
+import { OrcaRuntimeService } from './orca-runtime'
+import {
+  OPEN_CODE_WRITER_TOPOLOGY,
+  tmuxCliWriterEvent
+} from '../agent-hooks/server/cli-writer-observation'
 
 const snapshot = vi.hoisted(() => vi.fn())
-vi.mock('../../shared/process-table-snapshot-reader', () => ({
+vi.mock('../../shared/process-table-snapshot-reader', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   getFreshShellForegroundSnapshot: snapshot
 }))
+const probe = vi.hoisted(() => vi.fn())
+vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
 
 const row: AgentStatusIpcPayload = {
   paneKey: 'source',
@@ -38,12 +46,8 @@ function inspection(verdict: AgentProcessVerdict | null = null) {
     rows: () => [row],
     saved: () => [],
     observation: () => observation,
-    pane: () => ({ ptyId: 'pty', incarnationId: identity, identity }),
     sleeping: () => false,
-    terminal: () => ({
-      execution: 'term:pty',
-      pane: { ptyId: 'pty', incarnationId: identity, identity }
-    }),
+    terminal: () => ({ pane: { ptyId: 'pty', incarnationId: identity, identity } }),
     links: () => [],
     shellAlone: vi.fn(async () => true)
   }
@@ -94,7 +98,7 @@ describe('execution-host conversation writer inspection', () => {
     ] as const) {
       const check = inspection()
       if (cause === 'missing-pane') {
-        check.host.pane = () => null
+        check.host.terminal = () => ({ pane: null })
       }
       if (cause === 'missing-row') {
         check.host.observation = () => null
@@ -151,10 +155,10 @@ describe('execution-host conversation writer inspection', () => {
     check.host.sleeping = () => true
     await expect(check.run()).rejects.toMatchObject(refusal)
     check.host.sleeping = () => false
-    const pane = check.host.pane
-    check.host.pane = () => null
+    const terminal = check.host.terminal
+    check.host.terminal = () => ({ pane: null })
     await expect(check.run()).rejects.toMatchObject(refusal)
-    check.host.pane = pane
+    check.host.terminal = terminal
     await expect(check.run()).resolves.toBeUndefined()
     await expect(
       assertCliConversationWritersExited(
@@ -214,21 +218,39 @@ describe('execution-host conversation writer inspection', () => {
   })
 
   it('inspects the terminal a conversation leaves, whatever its rows now say', async () => {
-    const check = inspection('exited')
-    const identities = new AgentStatusObservedPaneIdentities()
-    const report = (id: string) =>
-      identities.record(
-        'source',
-        { kind: 'observed', terminalHandle: 'term', processIncarnation: 'pty', dispatchId: null },
-        {
-          paneKey: 'source',
-          connectionId: null,
-          receivedAt: 1,
-          stateStartedAt: 1,
-          providerSession: { key: 'session_id', id },
-          payload: { state: 'done', prompt: '', agentType: 'codex' }
-        }
-      )
+    const leaf = '11111111-1111-4111-8111-111111111111'
+    const pane = `tab-a:${leaf}`
+    let rows: AgentStatusIpcPayload[] = []
+    const runtime = new OrcaRuntimeService(null, undefined, {
+      getAgentProviderSessionSnapshot: () => rows,
+      readHookCliWriterObservation: () => ({
+        current: () => true,
+        topology: 'pane-owned',
+        presence: async () => null
+      })
+    })
+    const register = (tabId: string, incarnationId?: string, isWsl?: boolean) =>
+      runtime.registerPty('pty', 'workspace', null, { tabId, leafId: leaf, incarnationId }, isWsl)
+    register('tab-a', 'i1')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the census reads only listProcesses.
+    runtime.setPtyController({
+      listProcesses: async () => [{ id: 'pty', rootProcessId: 10, incarnationId: 'i1' }]
+    } as never)
+    const event = (agentType: string, extra?: Partial<EnrichedAgentHookEventPayload>) => ({
+      paneKey: pane,
+      connectionId: null,
+      receivedAt: 1,
+      stateStartedAt: 1,
+      providerSession: { key: 'session_id' as const, id: 'conversation' },
+      payload: { state: 'done' as const, prompt: '', agentType },
+      ...extra
+    })
+    const report = (agentType: string, extra?: Partial<EnrichedAgentHookEventPayload>) =>
+      runtime.recordCliWriterConversation(event(agentType, extra))
+    const check = (
+      agent: 'claude' | 'opencode',
+      source?: { workspaceId: string; paneKey: string }
+    ) => runtime.assertStructuredAdoptionTerminalWritersExited(agent, 'conversation', source)
     const shell = { pid: 10, ppid: 1, stat: 'Ss+', command: '/bin/zsh' }
     const census = async (run: () => Promise<void>) => {
       snapshot.mockResolvedValue([shell, { pid: 11, ppid: 10, stat: 'T', command: 'claude' }])
@@ -236,40 +258,41 @@ describe('execution-host conversation writer inspection', () => {
       snapshot.mockResolvedValue([shell])
       await expect(run()).resolves.toBeUndefined()
     }
-    check.host.shellAlone = () => posixCliWriterShellAlone(10)
-    check.host.links = () => {
-      const observed = identities.read('source')
-      return observed.kind === 'observed'
-        ? [...(observed.conversations?.values() ?? [])].map((conversation) => ({
-            ...conversation,
-            paneKey: 'source',
-            worktreeId: 'workspace',
-            execution: 'term:pty'
-          }))
-        : []
-    }
-    // A later run in the same terminal overwrote the row while the paused agent stayed behind.
-    report('conversation')
-    report('later-run')
-    check.host.rows = () => []
-    await census(check.run)
-    // The pane a header switch leaves is inspected even when nothing recorded the conversation there.
-    check.host.links = () => []
-    const header = () =>
-      assertCliConversationWritersExited(check.host, 'codex', 'conversation', {
-        paneKey: 'source',
-        worktreeId: 'workspace'
-      })
-    await census(header)
-    check.host.terminal = () => null
-    await expect(header()).rejects.toMatchObject(refusal)
-    // A row reloaded after restart has no observed identity, and its exited pid is not the census.
-    check.host.terminal = () => ({
-      execution: 'term:pty',
-      pane: { ptyId: 'pty', incarnationId: 'pty', identity: 'pty' }
+    // The header switch inspects the pane it leaves even when nothing recorded the conversation.
+    await census(() => check('claude', { workspaceId: 'workspace', paneKey: pane }))
+    // A row restored after restart has no observed identity; the pane's current PTY decides.
+    rows = [{ ...row, paneKey: pane, agentType: 'claude' }]
+    await census(() => check('claude'))
+    rows = []
+    // Paused, then a second run overwrote the row and the pane moved: the link is the execution's.
+    report('claude')
+    report('claude', { providerSession: { key: 'session_id', id: 'later-run' } })
+    register('tab-b', 'i1')
+    await census(() => check('claude'))
+    // The agent's own process can outlive the terminal's tree, as in detached tmux or nohup.
+    report('claude', {
+      agentPresence: { agent: 'claude', process: { pid: 12, platform: 'darwin', startTime: 's' } }
     })
-    check.host.rows = () => [row]
-    check.host.pane = () => null
-    await census(check.run)
+    for (const verdict of ['live', 'unverifiable', 'exited'] as const) {
+      probe.mockResolvedValueOnce(verdict)
+      const result = expect(check('claude'))
+      await (verdict === 'exited'
+        ? result.resolves.toBeUndefined()
+        : result.rejects.toMatchObject(refusal))
+    }
+    // An unmarked binding copy keeps a proven pane-owned link; an uninspectable PTY or tmux refuses.
+    const proven = { key: 'session_id' as const, id: 'conversation' }
+    Object.defineProperty(proven, OPEN_CODE_WRITER_TOPOLOGY, { value: 'pane-owned' })
+    report('opencode2', { providerSession: proven })
+    report('opencode2')
+    await census(() => check('opencode'))
+    register('tab-b', undefined, true)
+    await expect(check('opencode')).rejects.toMatchObject(refusal)
+    register('tab-b', undefined, false)
+    runtime.recordCliWriterConversation(tmuxCliWriterEvent(event('opencode2')))
+    await expect(check('opencode')).rejects.toMatchObject(refusal)
+    // A new incarnation is a new execution: the old one's links died with it.
+    register('tab-b', 'i2')
+    await expect(check('opencode')).resolves.toBeUndefined()
   })
 })

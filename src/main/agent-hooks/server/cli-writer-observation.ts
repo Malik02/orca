@@ -49,15 +49,27 @@ export function cliWriterTopology(row: AgentHookEventPayload): CliWriterObservat
   const binding = row.providerSession
   const topology =
     binding && OPEN_CODE_WRITER_TOPOLOGY in binding ? binding[OPEN_CODE_WRITER_TOPOLOGY] : undefined
-  return row.source !== 'opencode' &&
-    row.source !== 'opencode2' &&
-    row.source !== 'mimo-code' &&
-    row.payload.agentType !== 'opencode' &&
-    row.payload.agentType !== 'opencode2'
-    ? 'pane-owned'
-    : topology === 'pane-owned' || topology === 'shared'
-      ? topology
-      : 'unverifiable'
+  return topology === 'shared'
+    ? 'shared'
+    : row.source !== 'opencode' &&
+        row.source !== 'opencode2' &&
+        row.source !== 'mimo-code' &&
+        row.payload.agentType !== 'opencode' &&
+        row.payload.agentType !== 'opencode2'
+      ? 'pane-owned'
+      : topology === 'pane-owned'
+        ? topology
+        : 'unverifiable'
+}
+
+/** A tmux server outlives the pane it was started from, so nothing it publishes is pane-owned. */
+export function tmuxCliWriterEvent<T extends AgentHookEventPayload>(row: T): T {
+  if (!row.providerSession) {
+    return row
+  }
+  const providerSession = { ...row.providerSession }
+  Object.defineProperty(providerSession, OPEN_CODE_WRITER_TOPOLOGY, { value: 'shared' })
+  return { ...row, providerSession }
 }
 
 export type CliWriterExecutionMatches = (

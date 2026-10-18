@@ -89,21 +89,10 @@ describe('OpenCode writer observation', () => {
           rows: () => server.getStatusSnapshot(),
           saved: () => [],
           observation: (value) => server.readCliWriterObservation(value),
-          pane: () => ({ ptyId: 'pty', incarnationId: incarnation, identity: incarnation }),
           terminal: () => ({
-            execution: 'live',
             pane: { ptyId: 'pty', incarnationId: incarnation, identity: incarnation }
           }),
-          links: () => {
-            const observed = identities.read(PANE)
-            return observed.kind === 'observed'
-              ? [...(observed.conversations?.values() ?? [])].map((link) => ({
-                  ...link,
-                  paneKey: PANE,
-                  execution: 'live'
-                }))
-              : []
-          },
+          links: () => [],
           sleeping: () => false,
           shellAlone
         },

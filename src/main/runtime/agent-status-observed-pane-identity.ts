@@ -4,7 +4,11 @@ import {
   type ObservedAgentStatusPaneIdentity
 } from '../ipc/agent-status-ipc-boundary'
 import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server/server-types'
-import { cliWriterTopology } from '../agent-hooks/server/cli-writer-observation'
+import type { OrcaRuntimeService } from './orca-runtime'
+
+/** The runtime also links each conversation to the PTY execution that reported it. */
+type ObservedStatusRuntime = AgentStatusRuntimeEnrichment &
+  Partial<Pick<OrcaRuntimeService, 'recordCliWriterConversation'>>
 
 /** Bounded like the hook server's own per-pane maps; eviction only degrades a row to `unobserved`. */
 const MAX_OBSERVED_PANES = 1024
@@ -25,36 +29,13 @@ export class AgentStatusObservedPaneIdentities {
 
   /** An unresolvable pane records nothing: not knowing the identity now is not evidence
    *  against the last identity this runtime did observe for the pane. */
-  record(
-    paneKey: string,
-    identity: ObservedAgentStatusPaneIdentity,
-    event?: EnrichedAgentHookEventPayload
-  ): void {
+  record(paneKey: string, identity: ObservedAgentStatusPaneIdentity): void {
     if (identity.kind === 'unobserved') {
       return
     }
-    const previous = this.byPaneKey.get(paneKey)
-    // A new execution starts with no conversations: the old execution's writers died with it.
-    const conversations = new Map(
-      previous?.kind === 'observed' &&
-        previous.terminalHandle === identity.terminalHandle &&
-        previous.processIncarnation === identity.processIncarnation
-        ? previous.conversations
-        : undefined
-    )
-    const agent =
-      event?.connectionId === null && !event.structuredHost ? event.payload.agentType : undefined
-    if (event && agent && event.providerSession) {
-      const id = event.providerSession.id
-      conversations.set(`${agent}\0${id}`, {
-        agent,
-        id,
-        paneOwned: cliWriterTopology(event) === 'pane-owned'
-      })
-    }
     // Delete-then-set keeps insertion order most-recent, so eviction sheds the oldest pane.
     this.byPaneKey.delete(paneKey)
-    this.byPaneKey.set(paneKey, { ...identity, conversations })
+    this.byPaneKey.set(paneKey, identity)
     while (this.byPaneKey.size > MAX_OBSERVED_PANES) {
       const oldest = this.byPaneKey.keys().next().value
       if (typeof oldest !== 'string') {
@@ -72,7 +53,7 @@ export class AgentStatusObservedPaneIdentities {
 /** Buffers startup replay until PTY recovery has restored the runtime identities it fences. */
 export class AgentStatusObservedPaneIdentityCapture {
   private readonly pending = new Map<string, EnrichedAgentHookEventPayload>()
-  private runtime: AgentStatusRuntimeEnrichment | null = null
+  private runtime: ObservedStatusRuntime | null = null
 
   constructor(private readonly identities: AgentStatusObservedPaneIdentities) {}
 
@@ -84,7 +65,7 @@ export class AgentStatusObservedPaneIdentityCapture {
     this.pending.set(enriched.paneKey, enriched)
   }
 
-  attach(runtime: AgentStatusRuntimeEnrichment): void {
+  attach(runtime: ObservedStatusRuntime): void {
     this.runtime = runtime
     for (const enriched of this.pending.values()) {
       recordObservedAgentStatusPaneIdentity(this.identities, enriched, runtime)
@@ -97,8 +78,9 @@ export class AgentStatusObservedPaneIdentityCapture {
 export function recordObservedAgentStatusPaneIdentity(
   identities: AgentStatusObservedPaneIdentities,
   event: EnrichedAgentHookEventPayload,
-  runtime: AgentStatusRuntimeEnrichment | undefined
+  runtime: ObservedStatusRuntime | undefined
 ): void {
+  runtime?.recordCliWriterConversation?.(event)
   const binding = resolveAgentStatusBinding(event.paneKey, runtime)
   identities.record(
     event.paneKey,
@@ -109,7 +91,6 @@ export function recordObservedAgentStatusPaneIdentity(
           terminalHandle: binding.terminalHandle,
           processIncarnation: binding.processIncarnation,
           dispatchId: binding.kind === 'worker' ? binding.dispatchId : null
-        },
-    event
+        }
   )
 }

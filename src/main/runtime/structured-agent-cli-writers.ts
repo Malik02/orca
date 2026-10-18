@@ -10,6 +10,8 @@ import { getFreshShellForegroundSnapshot } from '../../shared/process-table-snap
 import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { AgentProcessIdentity } from '../../shared/agent-process-presence'
+import { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
 import {
   normalizeAgentProviderSession,
   type SleepingAgentSessionRecord
@@ -17,22 +19,26 @@ import {
 
 export type CliWriterPane = { ptyId: string; incarnationId: PtyIncarnationId; identity: string }
 type CliWriterCoordinates = { paneKey: string; worktreeId?: string }
-/** `execution` is `handle:processIncarnation`; `pane` is null when that PTY can't be inspected. */
-export type CliWriterTerminal = { execution: string | null; pane: CliWriterPane | null }
-export type CliWriterLink = CliWriterCoordinates & {
-  execution: string
+/** `pane` is null when the PTY can't be inspected: remote, WSL, disconnected or unresolvable. */
+export type CliWriterTerminal = { pane: CliWriterPane | null }
+/** A conversation one PTY execution reported; `process` is the agent the hooks last proved. */
+export type CliWriterConversation = {
   agent: string
   id: string
   paneOwned: boolean
+  process?: AgentProcessIdentity
+}
+export type CliWriterLink = CliWriterConversation & {
+  worktreeId: string
+  terminal: () => CliWriterTerminal | null
 }
 export type CliWriterHost = {
   rows: () => AgentStatusIpcPayload[]
   saved: () => SleepingAgentSessionRecord[]
   observation: (row: AgentStatusIpcPayload) => CliWriterObservation | null
-  pane: (row: Pick<AgentStatusIpcPayload, 'paneKey' | 'worktreeId'>) => CliWriterPane | null
   /** Null when nothing in the pane can still write: no PTY, or one whose exit was certified. */
   terminal: (pane: CliWriterCoordinates) => CliWriterTerminal | null
-  /** Conversations each pane's recorded execution reported, outliving the rows that named them. */
+  /** Conversations each live PTY's current execution reported, outliving the rows that named them. */
   links: () => CliWriterLink[]
   sleeping: (workspaceId: string) => boolean
   shellAlone: (pane: CliWriterPane) => Promise<boolean>
@@ -64,25 +70,30 @@ export async function assertCliConversationWritersExited(
     adoptsCliConversations(rowAgent) &&
     CLI_CONVERSATION_ADOPTING_AGENTS[rowAgent] === agent &&
     id === providerSessionId
+  const paneOf = (coordinates: CliWriterCoordinates) => host.terminal(coordinates)?.pane ?? null
   // The pane's PTY itself, not a recorded pid: a wrapper pid can read exited beside a paused agent.
-  const censusPane = async (coordinates: CliWriterCoordinates, absentAdmits: boolean) => {
-    const terminal = host.terminal(coordinates)
+  const censusPane = async (
+    read: () => CliWriterTerminal | null,
+    worktreeId: string | undefined,
+    absentAdmits: boolean
+  ) => {
+    const terminal = read()
     if (!terminal && absentAdmits) {
       return
     }
     const pane = terminal?.pane
     if (
       !pane ||
-      host.sleeping(coordinates.worktreeId ?? '') ||
+      host.sleeping(worktreeId ?? '') ||
       !(await host.shellAlone(pane)) ||
-      host.terminal(coordinates)?.pane?.identity !== pane.identity
+      read()?.pane?.identity !== pane.identity
     ) {
       throw refuse()
     }
   }
   try {
     if (source) {
-      await censusPane(source, false)
+      await censusPane(() => host.terminal(source), source.worktreeId, false)
     }
     const savedCandidates = () =>
       host
@@ -136,19 +147,19 @@ export async function assertCliConversationWritersExited(
       ) {
         throw refuse()
       }
-      const pane = host.pane(row)
+      const pane = paneOf(row)
       const presence = await observed.presence()
       if (
         !observed.current() ||
         presence === 'live' ||
         presence === 'unverifiable' ||
-        (pane && host.pane(row)?.identity !== pane.identity) ||
+        (pane && paneOf(row)?.identity !== pane.identity) ||
         host.sleeping(row.worktreeId ?? '')
       ) {
         throw refuse()
       }
       if (presence === 'exited' && matching.length === 0) {
-        await censusPane(row, true)
+        await censusPane(() => host.terminal(row), row.worktreeId, true)
         if (!observed.current()) {
           throw refuse()
         }
@@ -158,7 +169,7 @@ export async function assertCliConversationWritersExited(
         !pane ||
         !(await host.shellAlone(pane)) ||
         !observed.current() ||
-        host.pane(row)?.identity !== pane.identity ||
+        paneOf(row)?.identity !== pane.identity ||
         host.sleeping(row.worktreeId ?? '') ||
         matching.some((record) => !host.saved().includes(record) || !matches(record))
       ) {
@@ -169,7 +180,7 @@ export async function assertCliConversationWritersExited(
           record,
           () =>
             observed.current() &&
-            host.pane(row)?.identity === pane.identity &&
+            paneOf(row)?.identity === pane.identity &&
             !host.sleeping(row.worktreeId ?? '') &&
             matches(record) &&
             host.saved().includes(record)
@@ -177,16 +188,17 @@ export async function assertCliConversationWritersExited(
       }
     }
     for (const link of host.links()) {
-      // A link whose execution is no longer the pane's current one died with that execution.
-      if (
-        isConversation(link.agent, link.id) &&
-        host.terminal(link)?.execution === link.execution
-      ) {
-        if (!link.paneOwned) {
-          throw refuse()
-        }
-        await censusPane(link, false)
+      if (!isConversation(link.agent, link.id)) {
+        continue
       }
+      // The agent can outlive the terminal's tree (detached tmux, nohup); its probe only adds refusals.
+      if (
+        !link.paneOwned ||
+        (link.process && (await probeAgentProcessPresence(link.process)) !== 'exited')
+      ) {
+        throw refuse()
+      }
+      await censusPane(link.terminal, link.worktreeId, false)
     }
     for (const [record, identity] of savedIdentities) {
       if (covered.has(record)) {
@@ -197,14 +209,14 @@ export async function assertCliConversationWritersExited(
         throw refuse()
       }
       const coordinates = { paneKey, worktreeId }
-      const pane = host.pane(coordinates)
+      const pane = paneOf(coordinates)
       if (!pane) {
         throw refuse()
       }
       const current = () =>
         savedCurrent(record) &&
         !host.sleeping(worktreeId) &&
-        host.pane(coordinates)?.identity === pane.identity &&
+        paneOf(coordinates)?.identity === pane.identity &&
         !host.rows().some((row) => row.paneKey === paneKey)
       if (!current() || !(await host.shellAlone(pane)) || !current()) {
         throw refuse()

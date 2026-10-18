@@ -1,6 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import { OrcaRuntimeWithGetWorktreePs } from '../workspaces/workspace-process-listing'
 import { getProviderForPty } from '../../ipc/pty/provider/registry'
 import { LocalPtyProvider } from '../../providers/local-pty-provider'
@@ -12,8 +11,24 @@ import {
   type CliWriterPane,
   type CliWriterTerminal
 } from '../structured-agent-cli-writers'
+import type { EnrichedAgentHookEventPayload } from '../../agent-hooks/server/server-types'
+import {
+  OPEN_CODE_WRITER_TOPOLOGY,
+  cliWriterTopology
+} from '../../agent-hooks/server/cli-writer-observation'
 
 export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends OrcaRuntimeWithGetWorktreePs {
+  private cliWriterPtyPane(ptyId: string | null | undefined): CliWriterPane | null {
+    const pty = ptyId ? this.ptysById.get(ptyId) : undefined
+    return pty?.connected && !pty.connectionId && !pty.isWsl && pty.incarnationId
+      ? {
+          ptyId: pty.ptyId,
+          incarnationId: pty.incarnationId,
+          identity: `${pty.ptyId}:${pty.incarnationId}`
+        }
+      : null
+  }
+
   protected cliWriterTerminal(coordinates: {
     paneKey: string
     worktreeId?: string
@@ -23,36 +38,36 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
       return null
     }
     try {
-      const pane = this.resolveTerminalPane(coordinates.paneKey, coordinates.worktreeId ?? '')
-      const pty = pane.ptyId ? this.ptysById.get(pane.ptyId) : undefined
-      const handle = this.getAgentStatusTerminalHandleForPaneKey(coordinates.paneKey)
-      const incarnation = handle ? this.getTerminalProcessIncarnation(handle) : null
-      const execution = handle && incarnation ? `${handle}:${incarnation}` : null
-      return {
-        execution,
-        pane:
-          execution && pty?.connected && !pty.connectionId && !pty.isWsl && pty.incarnationId
-            ? {
-                ptyId: pty.ptyId,
-                incarnationId: pty.incarnationId,
-                identity: `${execution}:${pty.incarnationId}`
-              }
-            : null
-      }
+      const { ptyId } = this.resolveTerminalPane(coordinates.paneKey, coordinates.worktreeId ?? '')
+      return { pane: this.cliWriterPtyPane(ptyId) }
     } catch {
-      return { execution: null, pane: null }
+      return { pane: null }
     }
   }
 
-  protected cliWriterPane(
-    row: Pick<AgentStatusIpcPayload, 'paneKey' | 'worktreeId'>
-  ): CliWriterPane | null {
-    const observed = this.readObservedAgentStatusPaneIdentityFn(row.paneKey)
-    const terminal = this.cliWriterTerminal(row)
-    return observed.kind === 'observed' &&
-      terminal?.execution === `${observed.terminalHandle}:${observed.processIncarnation}`
-      ? terminal.pane
-      : null
+  /** On the PTY record, so a conversation link lives exactly as long as the execution it names. */
+  recordCliWriterConversation(event: EnrichedAgentHookEventPayload): void {
+    const agent =
+      event.connectionId === null && !event.structuredHost ? event.payload.agentType : undefined
+    const binding = event.providerSession
+    const pty = agent && binding ? this.getPtyRecordForPaneKey(event.paneKey) : null
+    if (!agent || !binding || !pty) {
+      return
+    }
+    if (pty.cliConversations?.incarnationId !== pty.incarnationId) {
+      pty.cliConversations = { incarnationId: pty.incarnationId, byKey: new Map() }
+    }
+    const key = `${agent}\0${binding.id}`
+    const previous = pty.cliConversations.byKey.get(key)
+    pty.cliConversations.byKey.set(key, {
+      agent,
+      id: binding.id,
+      // An unmarked binding copy can't vouch either way, so it never revokes an earlier proof.
+      paneOwned:
+        cliWriterTopology(event) === 'pane-owned' ||
+        (!(OPEN_CODE_WRITER_TOPOLOGY in binding) && previous?.paneOwned === true),
+      process: event.agentPresence?.process ?? previous?.process
+    })
   }
 
   async assertStructuredAdoptionTerminalWritersExited(
@@ -69,23 +84,25 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
               ?.sleepingAgentSessionsByPaneKey ?? {}
           ),
         observation: (row) => this.readHookCliWriterObservationFn?.(row) ?? null,
-        pane: (row) => this.cliWriterPane(row),
         terminal: (coordinates) => this.cliWriterTerminal(coordinates),
         links: () =>
-          [
-            ...new Map(
-              [...this.ptysById.values()].map((pty) => [pty.paneKey ?? '', pty.worktreeId] as const)
-            )
-          ].flatMap(([paneKey, worktreeId]) => {
-            const observed = this.readObservedAgentStatusPaneIdentityFn(paneKey)
-            return observed.kind === 'observed'
-              ? [...(observed.conversations?.values() ?? [])].map((conversation) => ({
-                  ...conversation,
-                  paneKey,
-                  worktreeId,
-                  execution: `${observed.terminalHandle}:${observed.processIncarnation}`
-                }))
-              : []
+          [...this.ptysById.values()].flatMap((pty) => {
+            const conversations = pty.cliConversations
+            if (
+              !conversations ||
+              conversations.incarnationId !== pty.incarnationId ||
+              this.getPtyLivenessVerdict(pty.ptyId)?.status === 'exited'
+            ) {
+              return []
+            }
+            const terminal = () => ({
+              pane: this.ptysById.get(pty.ptyId) === pty ? this.cliWriterPtyPane(pty.ptyId) : null
+            })
+            return [...conversations.byKey.values()].map((conversation) => ({
+              ...conversation,
+              worktreeId: pty.worktreeId,
+              terminal
+            }))
           }),
         sleeping: (workspaceId) =>
           [...this.terminalSleepStateByWorktreeId.values()].some(

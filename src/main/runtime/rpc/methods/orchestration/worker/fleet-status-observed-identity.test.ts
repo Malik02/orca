@@ -156,7 +156,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     expect(identities.read(PANE_KEY)).toEqual({ kind: 'unobserved' })
 
     capture.attach(runtime)
-    expect(identities.read(PANE_KEY)).toMatchObject({
+    expect(identities.read(PANE_KEY)).toEqual({
       kind: 'observed',
       terminalHandle: TERMINAL_HANDLE,
       processIncarnation: INCARNATION_ONE,

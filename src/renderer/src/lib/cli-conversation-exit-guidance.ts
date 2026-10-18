@@ -4,8 +4,8 @@ import type { CliConversationRowAgent } from '../../../shared/structured-agent-c
 
 export function cliConversationExitGuidance(agent: CliConversationRowAgent): string {
   return translate(
-    'components.native-chat.resumeInNewChat.exitFirst',
-    'Exit {{agent}} in the terminal, then open this conversation from Session History.',
+    'components.native-chat.resumeInNewChat.exitUnconfirmed',
+    "Orca can't confirm {{agent}} has exited in its terminal. Stop what's running there or close the terminal, then try again.",
     { agent: agentLabel(agent) }
   )
 }

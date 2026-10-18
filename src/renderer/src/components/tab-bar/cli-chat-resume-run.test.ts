@@ -221,7 +221,8 @@ describe('CLI identity resume through the existing launch owner', () => {
     mocks.call.mockResolvedValue({
       ok: false,
       refusal: {
-        code: 'agent_session_conflict', message: 'private host evidence',
+        code: 'agent_session_conflict',
+        message: 'private host evidence',
         details: { reason: 'conversationHeldElsewhere' },
         createAttemptRefusedBeforeCommit: true
       }
@@ -229,7 +230,7 @@ describe('CLI identity resume through the existing launch owner', () => {
     await runCliChatResume(SOURCE, true)
     expect(mocks.toast).toHaveBeenCalledTimes(1)
     expect(mocks.toast.mock.calls[0]?.[0]).toMatch(
-      /^Exit Claude.* in the terminal, then open this conversation from Session History\.$/
+      /^Orca can't confirm Claude.* has exited in its terminal\. Stop what's running there or close the terminal, then try again\.$/
     )
     expect(mocks.activate).not.toHaveBeenCalled()
     expect(tabs()).toEqual([])

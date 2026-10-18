@@ -25,6 +25,8 @@ import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/st
 const SESSION = 'session-adoption-replay'
 const THREAD = 'thread-adoption-replay'
 const WORKSPACE = 'workspace-1'
+const SOURCE_LEAF = '11111111-1111-4111-8111-111111111111'
+const SOURCE_PANE = `tab-source:${SOURCE_LEAF}`
 const OPERATION = `${Date.now()}-00000000000000000000000000000001`
 const CLIENT = {
   clientId: 'device-a',
@@ -34,6 +36,14 @@ const CLIENT = {
 
 let root: string
 let host: StructuredAgentSessionHost
+
+// The source terminal is a shell with nothing left running in it.
+vi.mock('../../../../shared/process-table-snapshot-reader', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getFreshShellForegroundSnapshot: async () => [
+    { pid: 10, ppid: 1, stat: 'Ss+', command: '/bin/zsh' }
+  ]
+}))
 
 function adapter(): StructuredAgentSessionAdapter {
   return {
@@ -67,8 +77,10 @@ function createParams(operationId = OPERATION, sessionId = SESSION) {
   const fields = {
     worktree: `id:${WORKSPACE}`,
     agent: 'codex' as const,
-    resumeFrom: { providerSessionId: THREAD,
-      cliSource: { workspaceId: WORKSPACE, paneKey: 'source-pane' } }
+    resumeFrom: {
+      providerSessionId: THREAD,
+      cliSource: { workspaceId: WORKSPACE, paneKey: SOURCE_PANE }
+    }
   }
   return {
     envelope: {
@@ -162,19 +174,39 @@ describe('committed adopting create RPC replay', () => {
         })
       } as never,
       undefined,
-      { prepareCodexStructuredLaunch: selectAccountHome,
+      {
+        prepareCodexStructuredLaunch: selectAccountHome,
         readHookCliWriterObservation: () => ({
-          current: () => true, topology: 'pane-owned', presence: async () => writerVerdict
+          current: () => true,
+          topology: 'pane-owned',
+          presence: async () => writerVerdict
         })
       }
     )
     const sourceRow = {
-      paneKey: 'source-pane', worktreeId: WORKSPACE, agentType: 'codex',
-      connectionId: null, receivedAt: 1, stateStartedAt: 1, state: 'waiting' as const, prompt: '',
+      paneKey: SOURCE_PANE,
+      worktreeId: WORKSPACE,
+      agentType: 'codex',
+      connectionId: null,
+      receivedAt: 1,
+      stateStartedAt: 1,
+      state: 'waiting' as const,
+      prompt: '',
       providerSession: { key: 'session_id' as const, id: THREAD, transcriptPath }
     }
     let rows: AgentStatusIpcPayload[] = [sourceRow]
-    const sourceRows = vi.spyOn(runtime, 'getAgentProviderSessionRows').mockImplementation(() => rows)
+    runtime.registerPty('source-pty', WORKSPACE, null, {
+      tabId: 'tab-source',
+      leafId: SOURCE_LEAF,
+      incarnationId: 'i1'
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the source census reads only listProcesses.
+    runtime.setPtyController({
+      listProcesses: async () => [{ id: 'source-pty', rootProcessId: 10, incarnationId: 'i1' }]
+    } as never)
+    const sourceRows = vi
+      .spyOn(runtime, 'getAgentProviderSessionRows')
+      .mockImplementation(() => rows)
     // The structured surface is settings-gated for every caller, not just mobile; this test
     // probes durable-identity replay, which only runs once the gate admits the call.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The RPC gate reads only this setting from the test double.
@@ -226,35 +258,58 @@ describe('committed adopting create RPC replay', () => {
       methods: STRUCTURED_AGENT_SESSION_METHODS
     })
     const historyFields = {
-      worktree: `id:${WORKSPACE}`, agent: 'codex' as const,
+      worktree: `id:${WORKSPACE}`,
+      agent: 'codex' as const,
       resumeFrom: { providerSessionId: THREAD }
     }
     const historyParams = {
       ...historyFields,
-      envelope: { ...createParams().envelope,
+      envelope: {
+        ...createParams().envelope,
         payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.create', sessionId: SESSION, fields: historyFields
+          method: 'agentSession.create',
+          sessionId: SESSION,
+          fields: historyFields
         })
       }
     }
-    for (const capabilities of [CLIENT.clientCapabilities,
-      [...CLIENT.clientCapabilities, AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY]]) {
-      expect(await call(dispatcher, historyParams, { ...CLIENT, clientCapabilities: capabilities }, unary))
-        .toMatchObject({ ok: true, result: { ok: false, refusal: {
-          code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' },
-          createAttemptRefusedBeforeCommit: true
-        } } })
+    for (const capabilities of [
+      CLIENT.clientCapabilities,
+      [...CLIENT.clientCapabilities, AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY]
+    ]) {
+      expect(
+        await call(
+          dispatcher,
+          historyParams,
+          { ...CLIENT, clientCapabilities: capabilities },
+          unary
+        )
+      ).toMatchObject({
+        ok: true,
+        result: {
+          ok: false,
+          refusal: {
+            code: 'agent_session_conflict',
+            details: { reason: 'conversationHeldElsewhere' },
+            createAttemptRefusedBeforeCommit: true
+          }
+        }
+      })
       expect(store.getRecord(SESSION)).toBeFalsy()
       expect(sessionAdapter.acquire).not.toHaveBeenCalled()
     }
     writerVerdict = 'exited'
     const params = createParams()
 
-    rows = unary ? [] : [{ ...sourceRow, providerSession: { ...sourceRow.providerSession, id: 'replaced' } }]
-    const route = vi.spyOn(runtime, 'routeClientHostedBrowserRpc').mockImplementationOnce(async () => {
-      rows = [sourceRow]
-      return { handled: false }
-    })
+    rows = unary
+      ? []
+      : [{ ...sourceRow, providerSession: { ...sourceRow.providerSession, id: 'replaced' } }]
+    const route = vi
+      .spyOn(runtime, 'routeClientHostedBrowserRpc')
+      .mockImplementationOnce(async () => {
+        rows = [sourceRow]
+        return { handled: false }
+      })
     expect(await call(dispatcher, params, CLIENT, unary)).toMatchObject({
       ok: true,
       result: { ok: false, refusal: { details: { reason: 'transcriptUnreadable' } } }
@@ -322,9 +377,15 @@ describe('committed adopting create RPC replay', () => {
     expect(selectAccountHome).toHaveBeenCalledTimes(1)
     expect(await call(dispatcher, createParams(OPERATION, 'another-chat'))).toMatchObject({
       ok: true,
-      result: { ok: false, refusal: { details: {
-        reason: 'conversationHeldElsewhere', owner: { sessionId: SESSION, workspaceId: WORKSPACE }
-      } } }
+      result: {
+        ok: false,
+        refusal: {
+          details: {
+            reason: 'conversationHeldElsewhere',
+            owner: { sessionId: SESSION, workspaceId: WORKSPACE }
+          }
+        }
+      }
     })
 
     // Only an exact committed replay bypasses an unavailable writer scan.
