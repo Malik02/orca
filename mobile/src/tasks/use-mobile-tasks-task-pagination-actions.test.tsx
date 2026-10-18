@@ -19,10 +19,15 @@ import { useMobileTasksTaskPaginationActions } from './use-mobile-tasks-task-pag
 import type { TaskListLoadingModel } from './use-mobile-tasks-task-list-loading'
 
 const client = { id: 'client' }
-const firstPage = [{ key: 'github:repo-1:issue:40', updatedAt: '2026-10-02T00:00:00Z' }]
+type PageRow = { key: string; updatedAt?: string; source?: { repoId: string } }
+
+const firstPage: PageRow[] = [{ key: 'github:repo-1:issue:40', updatedAt: '2026-10-02T00:00:00Z' }]
 const oldSelectionPage = [{ key: 'github:repo-1:issue:4', updatedAt: '2026-10-01T00:00:00Z' }]
 
-function buildModel(fetchGitHubItemsPage: () => Promise<unknown>) {
+function buildModel(
+  fetchGitHubItemsPage: () => Promise<unknown>,
+  githubCountedTotalPages: number | null = 2
+) {
   return {
     client,
     clientRef: { current: client },
@@ -31,7 +36,7 @@ function buildModel(fetchGitHubItemsPage: () => Promise<unknown>) {
     githubCurrentPage: 0,
     githubPages: [firstPage],
     githubPaginationLoading: false,
-    githubCountedTotalPages: 2,
+    githubCountedTotalPages,
     loadGenerationRef: { current: 1 },
     selectedHostedRepos: [{ id: 'repo-1' }],
     tasksSupported: true,
@@ -49,7 +54,7 @@ let renderer: ReactTestRenderer | null = null
 let changePage: ((page: number) => Promise<void>) | null = null
 let canLoadUncountedNextPage = false
 
-function mount(model: object): void {
+function mount(model: ReturnType<typeof buildModel>): void {
   function Harness(): null {
     const actions = useMobileTasksTaskPaginationActions(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture carries every member the page handler reads.
@@ -110,20 +115,17 @@ describe('GitHub task page change', () => {
   })
 
   describe('without a count, as in the default all-repos view', () => {
-    function rows(repoId: string, count: number) {
+    function rows(repoId: string, count: number): PageRow[] {
       return Array.from({ length: count }, (_, index) => ({
         key: `github:${repoId}:issue:${index}`,
         source: { repoId }
       }))
     }
 
-    function lastPageOffersNext(page: ReturnType<typeof rows>): boolean {
-      const model = {
-        ...buildModel(async () => ({ items: [], failedCount: 0 })),
-        githubCountedTotalPages: null,
-        githubPages: [page],
-        selectedHostedRepos: [{ id: 'repo-a' }, { id: 'repo-b' }]
-      }
+    function lastPageOffersNext(page: PageRow[]): boolean {
+      const model = buildModel(async () => ({ items: [], failedCount: 0 }), null)
+      model.githubPages = [page]
+      model.selectedHostedRepos = [{ id: 'repo-a' }, { id: 'repo-b' }]
       mount(model)
       return canLoadUncountedNextPage
     }
