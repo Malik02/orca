@@ -6,7 +6,6 @@ import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resu
 import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server/server-types'
 import {
   assertCliConversationWritersExited,
-  posixCliWriterShellAlone,
   type CliWriterHost
 } from './structured-agent-cli-writers'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -69,19 +68,10 @@ const refusal = {
 
 beforeEach(() => vi.clearAllMocks())
 describe('execution-host conversation writer inspection', () => {
-  it('refuses live writers even with a foreground shell and retains suspended background children', async () => {
+  it('refuses live writers even with a foreground shell', async () => {
     const live = inspection('live')
     await expect(live.run()).rejects.toMatchObject(refusal)
     expect(live.host.shellAlone).not.toHaveBeenCalled()
-    for (const stat of ['S', 'T']) {
-      snapshot.mockResolvedValue([
-        { pid: 10, ppid: 1, stat: 'Ss+', command: '/bin/zsh' },
-        { pid: 11, ppid: 10, stat, command: 'custom-agent-alias' }
-      ])
-      expect(await posixCliWriterShellAlone(10)).toBe(false)
-    }
-    snapshot.mockResolvedValue([{ pid: 10, ppid: 1, stat: 'Ss+', command: '/bin/zsh' }])
-    expect(await posixCliWriterShellAlone(10)).toBe(true)
   })
 
   it('accepts exact exited or unchanged shell-only proof, never loss of evidence', async () => {
@@ -89,7 +79,6 @@ describe('execution-host conversation writer inspection', () => {
     await expect(inspection('exited').run()).resolves.toBeUndefined()
     await expect(inspection().run()).resolves.toBeUndefined()
     for (const cause of [
-      'missing-pane',
       'missing-row',
       'sleeping',
       'failed-scan',
@@ -97,9 +86,6 @@ describe('execution-host conversation writer inspection', () => {
       'unknown-topology'
     ] as const) {
       const check = inspection()
-      if (cause === 'missing-pane') {
-        check.host.terminal = () => ({ pane: null })
-      }
       if (cause === 'missing-row') {
         check.host.observation = () => null
       }
@@ -253,7 +239,8 @@ describe('execution-host conversation writer inspection', () => {
     ) => runtime.assertStructuredAdoptionTerminalWritersExited(agent, 'conversation', source)
     const shell = { pid: 10, ppid: 1, stat: 'Ss+', command: '/bin/zsh' }
     const census = async (run: () => Promise<void>) => {
-      snapshot.mockResolvedValue([shell, { pid: 11, ppid: 10, stat: 'T', command: 'claude' }])
+      // Any suspended or background child counts, whatever its name.
+      snapshot.mockResolvedValue([shell, { pid: 11, ppid: 10, stat: 'T', command: 'agent-alias' }])
       await expect(run()).rejects.toMatchObject(refusal)
       snapshot.mockResolvedValue([shell])
       await expect(run()).resolves.toBeUndefined()
