@@ -58,8 +58,10 @@ vi.mock('@/lib/structured-agent-session-launch-admission', async (importOriginal
 }))
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
+const observation = vi.hoisted(() => ({ value: 'live' }))
 vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
   getStructuredAgentSessionStatusFeed: () => ({
+    getSessionObservation: () => observation.value,
     getSnapshot: () => new Map()
   })
 }))
@@ -289,12 +291,17 @@ describe('Session History keyboard selection', () => {
     await pick({ kind: 'structured', sessionId: 'new' })
     expect(order()).toEqual([resumed, 'other'])
 
-    // An idle chat is replaced with no prompt.
+    // A chat whose host can't be seen live asks; an idle one is replaced with no prompt.
     launch.sessionId = 'new-2'
     const idle = renderList({ resumeHere: { ...here, tabId: 'other' } })
+    observation.value = 'unverifiable'
+    confirm.mockResolvedValueOnce(false)
+    await pick({ kind: 'structured', sessionId: 'new-2' }, idle.press)
+    expect(confirm).toHaveBeenCalledTimes(3)
+    observation.value = 'live'
     await pick({ kind: 'structured', sessionId: 'new-2' }, idle.press)
     expect(order()).toEqual([resumed, structuredAgentSessionTabId('new-2')])
-    expect(confirm).toHaveBeenCalledTimes(2)
+    expect(confirm).toHaveBeenCalledTimes(3)
     launch.sessionId = 'new'
   })
 

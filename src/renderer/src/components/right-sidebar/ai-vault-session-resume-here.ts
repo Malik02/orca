@@ -103,7 +103,8 @@ export function resumeAiVaultSessionHere(args: {
       confirmLabel: translate('components.native-chat.resumeCommand.replace', 'Replace'),
       confirmVariant: 'destructive',
       initialFocus: 'confirm',
-      compact: true
+      compact: true,
+      ignoresOpeningGesture: true
     })
     .then((confirmed) => (confirmed ? replace() : requestNativeChatComposerFocus(chat.id)))
 }
@@ -180,7 +181,8 @@ function closeReplacedChat(here: AiVaultResumeHere): void {
   }
 }
 
-/** Replying or asking (the status store), or still starting (its launch, or its host's provider). */
+/** Replying or asking (the status store), still starting (its launch, or its host's provider), or
+ *  unobservable: a host that can't be seen live may still be running the chat's agent. */
 function isChatBusy(workspaceId: string, tab: Tab): boolean {
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
   const status = useAppStore.getState().agentStatusByPaneKey[paneKey]?.state
@@ -191,8 +193,12 @@ function isChatBusy(workspaceId: string, tab: Tab): boolean {
     return true
   }
   const target = structuredAgentSessionTargetForHost(tab.executionHostId)
-  const summary = target
-    ? getStructuredAgentSessionStatusFeed(target).getSnapshot().get(tab.entityId)
-    : undefined
-  return summary?.hostExecutionPhase === 'starting'
+  if (!target) {
+    return true
+  }
+  const feed = getStructuredAgentSessionStatusFeed(target)
+  return (
+    feed.getSessionObservation(tab.entityId) !== 'live' ||
+    feed.getSnapshot().get(tab.entityId)?.hostExecutionPhase === 'starting'
+  )
 }

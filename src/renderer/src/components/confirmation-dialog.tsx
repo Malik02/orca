@@ -50,6 +50,7 @@ export function ConfirmationDialogProvider({
   const Icon = displayedRequest?.options.icon
   const compact = displayedRequest?.options.compact === true
   const buttonSize = compact ? 'sm' : 'default'
+  const guarded = displayedRequest?.options.ignoresOpeningGesture === true
 
   useEffect(() => {
     // Why: this provider's dialog is not represented by activeModal. Block
@@ -104,6 +105,11 @@ export function ConfirmationDialogProvider({
           showCloseButton={false}
           size={compact ? 'compact' : 'default'}
           className={cn('sm:max-w-md', Icon && 'gap-6')}
+          onInteractOutside={(event) => {
+            if (guarded) {
+              event.preventDefault()
+            }
+          }}
           onOpenAutoFocus={(event) => {
             if (activeRequest?.options.initialFocus === 'confirm') {
               event.preventDefault()
@@ -170,7 +176,17 @@ export function ConfirmationDialogProvider({
               type="button"
               variant={displayedRequest?.options.confirmVariant ?? 'default'}
               size={buttonSize}
-              onClick={() => settleActiveRequest(true)}
+              // Why: the gesture that opened the prompt may still be repeating or clicking.
+              onKeyDown={(event) => {
+                if (guarded && event.repeat) {
+                  event.preventDefault()
+                }
+              }}
+              onClick={(event) => {
+                if (!guarded || event.detail <= 1) {
+                  settleActiveRequest(true)
+                }
+              }}
             >
               {displayedRequest?.options.confirmLabel ??
                 translate('auto.components.confirmation.dialog.8490e5d36a', 'Confirm')}
