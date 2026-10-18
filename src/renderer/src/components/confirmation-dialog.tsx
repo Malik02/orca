@@ -102,6 +102,7 @@ export function ConfirmationDialogProvider({
       >
         <DialogContent
           showCloseButton={false}
+          size={compact ? 'compact' : 'default'}
           className={cn('sm:max-w-md', Icon && 'gap-6')}
           onOpenAutoFocus={(event) => {
             if (activeRequest?.options.initialFocus === 'confirm') {
