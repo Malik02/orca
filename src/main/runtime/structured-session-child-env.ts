@@ -34,7 +34,7 @@
  * remote selectors a shell profile may export are set empty, which the CLI reads as unset: empty
  * rather than deleted, because the child is spawned over Orca's own env, which may carry them.
  * Explicit `--environment` / `--pairing-code` flags still work, and a person's terminal keeps
- * its selectors. A login shell the agent itself starts can export them again.
+ * its selectors. A login shell the agent starts can export them again, unless its agent sets them.
  *
  * Deliberately NOT `ORCA_PANE_KEY`. Claude structured sessions run hooks, and a pane key in their
  * environment starts flowing into hook-emitted agent-status payloads and the hook-attestation,
@@ -64,8 +64,6 @@ import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-mar
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
-import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
-import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
 import { resolveStructuredWorkerIdentityForSession } from './structured-worker-authority'
 
 /**
@@ -86,6 +84,13 @@ export type SealedStructuredSessionChild = {
   env: Record<string, string>
   /** Removed from what the child inherits, after `env` is laid over it. */
   envToDelete: string[]
+  /**
+   * The session values the seal wrote, for an agent that rebuilds each command's env from its own
+   * policy (Codex `shell_environment_policy`), which drops them otherwise. Never PATH: Codex keeps
+   * it under `inherit = "core"`, and a set PATH would freeze it over a login shell's PATH restore.
+   * Never the spawn token, which is the child's alone.
+   */
+  commandEnv: Record<string, string>
 }
 
 /**
@@ -102,34 +107,29 @@ export function sealStructuredSessionChild(input: {
   cliRuntimeCommand?: string
 }): SealedStructuredSessionChild {
   const identity = childIdentity(input.sessionId, input.env)
-  const named = new Set([
-    ORCA_AGENT_SESSION_ID_ENV,
-    ORCA_STRUCTURED_SESSION_ENV,
-    ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV,
-    ...(identity.workerHandle ? ['ORCA_TERMINAL_HANDLE'] : [])
-  ])
+  const named = new Set([...Object.keys(identity.commandEnv), ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV])
   const env = input.cliRuntimeCommand
     ? withCliRuntimeOnPath(input.cliRuntimeCommand, identity.env, { platform: process.platform })
     : identity.env
   return {
     env: { ...env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: input.spawnToken },
-    envToDelete: input.inheritedEnvToDelete.filter((key) => !named.has(key))
+    envToDelete: input.inheritedEnvToDelete.filter((key) => !named.has(key)),
+    commandEnv: identity.commandEnv
   }
 }
 
 function childIdentity(
   sessionId: string,
   childEnv: Record<string, string>
-): { env: Record<string, string>; workerHandle: string | null } {
+): { env: Record<string, string>; commandEnv: Record<string, string> } {
   const identity = resolveStructuredWorkerIdentityForSession(sessionId, null)
-  const env: Record<string, string> = {
-    ...childEnv,
+  const named: Record<string, string> = {
     ...(identity ? { ORCA_TERMINAL_HANDLE: identity.handle } : {}),
     [ORCA_AGENT_SESSION_ID_ENV]: sessionId,
     [ORCA_STRUCTURED_SESSION_ENV]: '1'
   }
-  applyThisAppCli(env)
-  return { env, workerHandle: identity?.handle ?? null }
+  const env = { ...childEnv, ...named }
+  return { env, commandEnv: { ...named, ...applyThisAppCli(env) } }
 }
 
 const REMOTE_RUNTIME_SELECTOR_ENV_KEYS = [
@@ -139,66 +139,35 @@ const REMOTE_RUNTIME_SELECTOR_ENV_KEYS = [
 ] as const
 
 /**
- * A host with no app environment installed — a plain-Node fork, or a unit test — has no userData
- * root to resolve, and inventing one would write a shim into the wrong directory.
+ * Returns the values it set, beside the PATH it prepends. A host with no app environment
+ * installed — a plain-Node fork, or a unit test — has no userData root to resolve, and inventing
+ * one would write a shim into the wrong directory.
  */
-function applyThisAppCli(env: Record<string, string>): void {
+function applyThisAppCli(env: Record<string, string>): Record<string, string> {
   delete env.ORCA_CLI_COMMAND
   if (!hasAppEnvironment()) {
-    return
+    return {}
   }
   const app = getAppEnvironment()
   const userDataPath = app.getPath('userData')
   const isPackaged = app.isPackaged()
-  env.ORCA_USER_DATA_PATH = userDataPath
+  const set: Record<string, string> = { ORCA_USER_DATA_PATH: userDataPath }
   for (const key of REMOTE_RUNTIME_SELECTOR_ENV_KEYS) {
-    env[key] = ''
+    set[key] = ''
   }
+  Object.assign(env, set)
   const launcher = prependOrcaCliDirToChildPath(env, {
     isPackaged,
     userDataPath,
     resourcesPath: process.resourcesPath ?? null
   })
   if (launcher) {
+    set.ORCA_CLI_COMMAND = launcher
     env.ORCA_CLI_COMMAND = launcher
   } else {
     console.warn(
       "[structured-session] This app's CLI launcher did not resolve; the session's child has no ORCA_CLI_COMMAND."
     )
   }
-}
-
-/** What the agent's own commands need to act as this session and reach this app. Never PATH. */
-const SESSION_COMMAND_ENV_KEYS = [
-  ORCA_AGENT_SESSION_ID_ENV,
-  ORCA_STRUCTURED_SESSION_ENV,
-  'ORCA_TERMINAL_HANDLE',
-  'ORCA_CLI_COMMAND',
-  'ORCA_USER_DATA_PATH',
-  ...REMOTE_RUNTIME_SELECTOR_ENV_KEYS,
-  NATIVE_CHAT_SCRATCH_DIR_ENV
-] as const
-
-/**
- * The sealed child's session values its agent must hand on to each command it runs. A provider
- * that rebuilds a command's env from its own policy (Codex `shell_environment_policy`) drops them
- * otherwise, and the command can no longer say which session it speaks for.
- */
-export function structuredSessionCommandEnv(child: {
-  env: Record<string, string>
-  envToDelete: readonly string[]
-}): Record<string, string> {
-  const deleted = new Set(child.envToDelete)
-  const commandEnv: Record<string, string> = {}
-  for (const key of SESSION_COMMAND_ENV_KEYS) {
-    const value = child.env[key]
-    if (value !== undefined && !deleted.has(key)) {
-      commandEnv[key] = value
-    }
-  }
-  // Only a worker's own handle: any other was inherited from the pane that started Orca.
-  if (!isStructuredWorkerHandle(commandEnv.ORCA_TERMINAL_HANDLE)) {
-    delete commandEnv.ORCA_TERMINAL_HANDLE
-  }
-  return commandEnv
+  return set
 }

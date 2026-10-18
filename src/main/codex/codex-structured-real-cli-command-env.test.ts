@@ -1,5 +1,6 @@
-// The installed Codex under a user policy that keeps only core env vars: a command the thread runs
-// must still see the chat's identity, on a new thread and on a cold resume. Opt-in
+// The installed Codex under a user policy that keeps only core env vars: a user shell command
+// (`thread/shellCommand`) must still see the chat's identity, on a new thread and on a cold resume.
+// The model's exec tool reads the same `shell_environment_policy.set` in Codex's source. Opt-in
 // (ORCA_REAL_CODEX_CLI_TEST=1); no account is used, nothing reaches a model.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

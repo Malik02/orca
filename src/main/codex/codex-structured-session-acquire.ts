@@ -24,7 +24,7 @@ import {
 } from './codex-structured-owner-identity'
 import { openCodexThread } from './codex-structured-thread-open'
 import { withCodexVisualsThreadConfig } from './codex-structured-visuals'
-import { structuredSessionCommandEnv } from '../runtime/structured-session-child-env'
+import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
 import {
   closeCodexPublishedSession,
   handleCodexSessionExit
@@ -194,10 +194,10 @@ export async function acquireCodexStructuredSession(input: {
       ...(deps.logger ? { logger: deps.logger } : {})
     })
     acquisitions.assertCurrent(sessionId, attempt)
-    const commandEnv = structuredSessionCommandEnv({
-      env: launch.env ?? {},
-      envToDelete: launch.envToDelete ?? []
-    })
+    const commandEnv = {
+      ...launch.commandEnv,
+      ...(launch.visuals ? { [NATIVE_CHAT_SCRATCH_DIR_ENV]: launch.visuals.folder } : {})
+    }
     const opened = await openCodexThread(
       connection,
       { ...threadLaunch, commandEnv },

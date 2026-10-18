@@ -49,6 +49,8 @@ export type CodexStructuredLaunch = {
   /** The child's sealed environment, and the inherited keys it must not keep. */
   env?: Record<string, string>
   envToDelete?: readonly string[]
+  /** The session values each command must see, whatever the user's shell environment policy. */
+  commandEnv?: Record<string, string>
   /** This chat's scratch folder and visuals skill; absent when the chat has no visuals. */
   visuals?: NativeChatVisualsLaunch
 }

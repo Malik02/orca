@@ -207,7 +207,10 @@ describe('a Codex chat acquisition with visuals', () => {
       expect(methods.indexOf('config/read')).toBeLessThan(methods.indexOf(open))
       expect(connection.calls.find((call) => call.method === open)?.params).toMatchObject({
         ...MANUAL,
-        config: { 'sandbox_workspace_write.writable_roots': ['/home/me/scratch', VISUALS.folder] }
+        config: {
+          'sandbox_workspace_write.writable_roots': ['/home/me/scratch', VISUALS.folder],
+          [`shell_environment_policy.set.${NATIVE_CHAT_SCRATCH_DIR_ENV}`]: VISUALS.folder
+        }
       })
       expect(connection.launch.env?.[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(VISUALS.folder)
     }
