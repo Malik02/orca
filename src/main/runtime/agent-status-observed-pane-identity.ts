@@ -4,6 +4,7 @@ import {
   type ObservedAgentStatusPaneIdentity
 } from '../ipc/agent-status-ipc-boundary'
 import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server/server-types'
+import { cliWriterTopology } from '../agent-hooks/server/cli-writer-observation'
 
 /** Bounded like the hook server's own per-pane maps; eviction only degrades a row to `unobserved`. */
 const MAX_OBSERVED_PANES = 1024
@@ -24,13 +25,36 @@ export class AgentStatusObservedPaneIdentities {
 
   /** An unresolvable pane records nothing: not knowing the identity now is not evidence
    *  against the last identity this runtime did observe for the pane. */
-  record(paneKey: string, identity: ObservedAgentStatusPaneIdentity): void {
+  record(
+    paneKey: string,
+    identity: ObservedAgentStatusPaneIdentity,
+    event?: EnrichedAgentHookEventPayload
+  ): void {
     if (identity.kind === 'unobserved') {
       return
     }
+    const previous = this.byPaneKey.get(paneKey)
+    // A new execution starts with no conversations: the old execution's writers died with it.
+    const conversations = new Map(
+      previous?.kind === 'observed' &&
+        previous.terminalHandle === identity.terminalHandle &&
+        previous.processIncarnation === identity.processIncarnation
+        ? previous.conversations
+        : undefined
+    )
+    const agent =
+      event?.connectionId === null && !event.structuredHost ? event.payload.agentType : undefined
+    if (event && agent && event.providerSession) {
+      const id = event.providerSession.id
+      conversations.set(`${agent}\0${id}`, {
+        agent,
+        id,
+        paneOwned: cliWriterTopology(event) === 'pane-owned'
+      })
+    }
     // Delete-then-set keeps insertion order most-recent, so eviction sheds the oldest pane.
     this.byPaneKey.delete(paneKey)
-    this.byPaneKey.set(paneKey, identity)
+    this.byPaneKey.set(paneKey, { ...identity, conversations })
     while (this.byPaneKey.size > MAX_OBSERVED_PANES) {
       const oldest = this.byPaneKey.keys().next().value
       if (typeof oldest !== 'string') {
@@ -54,7 +78,7 @@ export class AgentStatusObservedPaneIdentityCapture {
 
   observe(enriched: EnrichedAgentHookEventPayload): void {
     if (this.runtime) {
-      recordObservedAgentStatusPaneIdentity(this.identities, enriched.paneKey, this.runtime)
+      recordObservedAgentStatusPaneIdentity(this.identities, enriched, this.runtime)
       return
     }
     this.pending.set(enriched.paneKey, enriched)
@@ -63,7 +87,7 @@ export class AgentStatusObservedPaneIdentityCapture {
   attach(runtime: AgentStatusRuntimeEnrichment): void {
     this.runtime = runtime
     for (const enriched of this.pending.values()) {
-      recordObservedAgentStatusPaneIdentity(this.identities, enriched.paneKey, runtime)
+      recordObservedAgentStatusPaneIdentity(this.identities, enriched, runtime)
     }
     this.pending.clear()
   }
@@ -72,12 +96,12 @@ export class AgentStatusObservedPaneIdentityCapture {
 /** Ingest-time capture: resolve the pane once, as the status arrives, and keep that answer. */
 export function recordObservedAgentStatusPaneIdentity(
   identities: AgentStatusObservedPaneIdentities,
-  paneKey: string,
+  event: EnrichedAgentHookEventPayload,
   runtime: AgentStatusRuntimeEnrichment | undefined
 ): void {
-  const binding = resolveAgentStatusBinding(paneKey, runtime)
+  const binding = resolveAgentStatusBinding(event.paneKey, runtime)
   identities.record(
-    paneKey,
+    event.paneKey,
     binding.kind === 'unresolved'
       ? UNOBSERVED
       : {
@@ -85,6 +109,7 @@ export function recordObservedAgentStatusPaneIdentity(
           terminalHandle: binding.terminalHandle,
           processIncarnation: binding.processIncarnation,
           dispatchId: binding.kind === 'worker' ? binding.dispatchId : null
-        }
+        },
+    event
   )
 }

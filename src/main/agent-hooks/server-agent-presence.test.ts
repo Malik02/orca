@@ -1,6 +1,12 @@
-import { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } from '../runtime/agent-status-observed-pane-identity'
+import {
+  AgentStatusObservedPaneIdentities,
+  AgentStatusObservedPaneIdentityCapture
+} from '../runtime/agent-status-observed-pane-identity'
 import { assertCliConversationWritersExited } from '../runtime/structured-agent-cli-writers'
-import { OPEN_CODE_WRITER_TOPOLOGY, cliWriterExecutionMatcher } from './server/cli-writer-observation'
+import {
+  OPEN_CODE_WRITER_TOPOLOGY,
+  cliWriterExecutionMatcher
+} from './server/cli-writer-observation'
 import { toAgentStatusIpcPayload } from './server/server-status-identity'
 import { buildRelayHookEnvelope } from '../../wsl-guest/agent-hook-envelope-build'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -28,7 +34,9 @@ afterEach(() => {
 })
 
 class PresenceTestServer extends AgentHookServer {
-  persistedWriterState(): string { return this.serializeStatusFile() }
+  persistedWriterState(): string {
+    return this.serializeStatusFile()
+  }
 
   applyTranscriptUpdate(): void {
     const row = this.state.lastStatusByPaneKey.get(PANE)
@@ -97,7 +105,12 @@ describe('host-owned hook presence', () => {
     probe.mockResolvedValue('exited')
     expect(await observed?.presence()).toBe('exited')
     expect(observed?.current()).toBe(true)
-    expect(server.readCliWriterObservation({ ...row, providerSession: { key: 'session_id', id: 'other' } })).toBeNull()
+    expect(
+      server.readCliWriterObservation({
+        ...row,
+        providerSession: { key: 'session_id', id: 'other' }
+      })
+    ).toBeNull()
     await hook(server, 'UserPromptSubmit')
     expect(observed?.current()).toBe(false)
     expect(server.persistedWriterState()).not.toContain('pane-owned')
@@ -123,8 +136,22 @@ describe('host-owned hook presence', () => {
     }
     const observation = () => server.readCliWriterObservation(row())
     const post = async (extra: Record<string, unknown> = { opencodeMajor: 2 }) => {
-      expect((await postHookEvent(server, { ...buildBody({ hook_event_name: 'SessionBusy',
-        sessionID: 'open-code-conversation', prompt: 'task' }), ...extra }, '/hook/opencode2')).status).toBe(204)
+      expect(
+        (
+          await postHookEvent(
+            server,
+            {
+              ...buildBody({
+                hook_event_name: 'SessionBusy',
+                sessionID: 'open-code-conversation',
+                prompt: 'task'
+              }),
+              ...extra
+            },
+            '/hook/opencode2'
+          )
+        ).status
+      ).toBe(204)
     }
     await post()
     capture.attach(runtime)
@@ -132,21 +159,58 @@ describe('host-owned hook presence', () => {
     expect(observation()?.topology).toBe('unverifiable')
     await post()
     const shellAlone = vi.fn(async () => false)
-    const inspect = () => assertCliConversationWritersExited({ rows: () => server.getStatusSnapshot(), saved: () => [],
-      observation: (value) => server.readCliWriterObservation(value), pane: () => ({ ptyId: 'pty', incarnationId: incarnation, identity: incarnation }),
-      sleeping: () => false, shellAlone }, 'opencode', 'open-code-conversation')
+    const inspect = () =>
+      assertCliConversationWritersExited(
+        {
+          rows: () => server.getStatusSnapshot(),
+          saved: () => [],
+          observation: (value) => server.readCliWriterObservation(value),
+          pane: () => ({ ptyId: 'pty', incarnationId: incarnation, identity: incarnation }),
+          terminal: () => ({
+            execution: 'live',
+            pane: { ptyId: 'pty', incarnationId: incarnation, identity: incarnation }
+          }),
+          links: () => {
+            const observed = identities.read(PANE)
+            return observed.kind === 'observed'
+              ? [...(observed.conversations?.values() ?? [])].map((link) => ({
+                  ...link,
+                  paneKey: PANE,
+                  execution: 'live'
+                }))
+              : []
+          },
+          sleeping: () => false,
+          shellAlone
+        },
+        'opencode',
+        'open-code-conversation'
+      )
     await expect(inspect()).rejects.toMatchObject({ refusal: { code: 'agent_session_conflict' } })
     const interrupt = () => {
       const value = row()
-      expect(server.inferInterrupt({ paneKey: PANE, baselineUpdatedAt: value.receivedAt,
-        baselineStateStartedAt: value.stateStartedAt, baselinePrompt: value.prompt,
-        baselineAgentType: value.agentType, intent: 'ctrl-c' })).toBe(true)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: value.receivedAt,
+          baselineStateStartedAt: value.stateStartedAt,
+          baselinePrompt: value.prompt,
+          baselineAgentType: value.agentType,
+          intent: 'ctrl-c'
+        })
+      ).toBe(true)
     }
     interrupt()
     expect(observation()?.topology).toBe('pane-owned')
-    const repaint = (origin?: 'process') => server.ingestTerminalStatus({ paneKey: PANE,
-      tabId: 'tab-1', worktreeId: 'wt-1', terminalHandle: 'terminal-a', origin,
-      payload: { state: 'done', prompt: 'changed repaint', agentType: 'opencode2' } })
+    const repaint = (origin?: 'process') =>
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        terminalHandle: 'terminal-a',
+        origin,
+        payload: { state: 'done', prompt: 'changed repaint', agentType: 'opencode2' }
+      })
     repaint()
     expect(observation()?.topology).toBe('pane-owned')
     shellAlone.mockResolvedValue(true)
@@ -154,9 +218,16 @@ describe('host-owned hook presence', () => {
     const binding = row().providerSession
     expect(binding && OPEN_CODE_WRITER_TOPOLOGY in binding).toBe(true)
     const snapshot = row()
-    const event = { ...snapshot, restoredUnconfirmed: snapshot.restoredUnconfirmed ? true as const : undefined,
-      payload: { state: 'done' as const, prompt: '', agentType: 'opencode2' } }
-    for (const value of [event, toAgentStatusIpcPayload(event), buildRelayHookEnvelope(event, 'opencode2')]) {
+    const event = {
+      ...snapshot,
+      restoredUnconfirmed: snapshot.restoredUnconfirmed ? (true as const) : undefined,
+      payload: { state: 'done' as const, prompt: '', agentType: 'opencode2' }
+    }
+    for (const value of [
+      event,
+      toAgentStatusIpcPayload(event),
+      buildRelayHookEnvelope(event, 'opencode2')
+    ]) {
       expect(JSON.stringify(value)).not.toContain('pane-owned')
       expect(Object.getOwnPropertySymbols(structuredClone(value).providerSession ?? {})).toEqual([])
     }
@@ -166,8 +237,13 @@ describe('host-owned hook presence', () => {
       expect(observation()?.topology).not.toBe('pane-owned')
     }
     await post()
-    server.ingestTerminalStatus({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1',
-      origin: 'process', payload: { state: 'working', prompt: 'task', agentType: 'opencode2' } })
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      origin: 'process',
+      payload: { state: 'working', prompt: 'task', agentType: 'opencode2' }
+    })
     expect(observation()?.topology).toBe('unverifiable')
     await post()
     incarnation = 'execution-b'

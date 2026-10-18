@@ -148,9 +148,11 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   )
   state.runtime = runtime
   agentHookServer.subscribeEnrichedStatus((enriched) =>
-    recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
+    recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)
   )
-  agentHookServer.setCliWriterExecutionMatcher(cliWriterExecutionMatcher(observedPaneIdentities, runtime))
+  agentHookServer.setCliWriterExecutionMatcher(
+    cliWriterExecutionMatcher(observedPaneIdentities, runtime)
+  )
   // Why before anything can attach: a client host that reattaches to a restarted runtime is only
   // handed its pages back if the runtime found them first.
   runtime.rehydrateClientHostedBrowserPages()

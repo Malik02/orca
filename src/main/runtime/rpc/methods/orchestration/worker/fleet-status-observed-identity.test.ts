@@ -53,7 +53,7 @@ function createWorld(): ObservedWorld {
   const server = new AgentHookServer()
   const observed = new AgentStatusObservedPaneIdentities()
   server.subscribeEnrichedStatus((entry) =>
-    recordObservedAgentStatusPaneIdentity(observed, entry.paneKey, identity)
+    recordObservedAgentStatusPaneIdentity(observed, entry, identity)
   )
   const host = {
     ...identity,
@@ -156,7 +156,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     expect(identities.read(PANE_KEY)).toEqual({ kind: 'unobserved' })
 
     capture.attach(runtime)
-    expect(identities.read(PANE_KEY)).toEqual({
+    expect(identities.read(PANE_KEY)).toMatchObject({
       kind: 'observed',
       terminalHandle: TERMINAL_HANDLE,
       processIncarnation: INCARNATION_ONE,

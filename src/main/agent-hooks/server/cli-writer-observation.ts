@@ -1,6 +1,13 @@
-import { resolveAgentStatusBinding, type AgentStatusRuntimeEnrichment } from '../../ipc/agent-status-ipc-boundary'
+import {
+  resolveAgentStatusBinding,
+  type AgentStatusRuntimeEnrichment
+} from '../../ipc/agent-status-ipc-boundary'
 import type { AgentStatusObservedPaneIdentities } from '../../runtime/agent-status-observed-pane-identity'
-import { isSameAgentProcess, type AgentProcessIdentity, type AgentProcessVerdict } from '../../../shared/agent-process-presence'
+import {
+  isSameAgentProcess,
+  type AgentProcessIdentity,
+  type AgentProcessVerdict
+} from '../../../shared/agent-process-presence'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 
@@ -18,14 +25,39 @@ export function retainOpenCodeWriterTopology(
   source: AgentHookSource,
   body: unknown
 ): void {
-  if (!event?.providerSession || (source !== 'opencode' && source !== 'opencode2' && source !== 'mimo-code') || !body || typeof body !== 'object') {
+  if (
+    !event?.providerSession ||
+    (source !== 'opencode' && source !== 'opencode2' && source !== 'mimo-code') ||
+    !body ||
+    typeof body !== 'object'
+  ) {
     return
   }
   const major = 'opencodeMajor' in body ? body.opencodeMajor : undefined
-  const topology = typeof major === 'number' && major >= 2 ? 'pane-owned' :
-    ('opencodeSharedServer' in body && body.opencodeSharedServer === 1) ||
-    ('opencodeTui' in body && body.opencodeTui === 1) ? 'shared' : 'unverifiable'
+  const topology =
+    typeof major === 'number' && major >= 2
+      ? 'pane-owned'
+      : ('opencodeSharedServer' in body && body.opencodeSharedServer === 1) ||
+          ('opencodeTui' in body && body.opencodeTui === 1)
+        ? 'shared'
+        : 'unverifiable'
   Object.defineProperty(event.providerSession, OPEN_CODE_WRITER_TOPOLOGY, { value: topology })
+}
+
+/** OpenCode-family servers can outlive their pane; only the binding they posted can prove otherwise. */
+export function cliWriterTopology(row: AgentHookEventPayload): CliWriterObservation['topology'] {
+  const binding = row.providerSession
+  const topology =
+    binding && OPEN_CODE_WRITER_TOPOLOGY in binding ? binding[OPEN_CODE_WRITER_TOPOLOGY] : undefined
+  return row.source !== 'opencode' &&
+    row.source !== 'opencode2' &&
+    row.source !== 'mimo-code' &&
+    row.payload.agentType !== 'opencode' &&
+    row.payload.agentType !== 'opencode2'
+    ? 'pane-owned'
+    : topology === 'pane-owned' || topology === 'shared'
+      ? topology
+      : 'unverifiable'
 }
 
 export type CliWriterExecutionMatches = (
@@ -39,17 +71,21 @@ export function cliWriterExecutionMatcher(
 ): CliWriterExecutionMatches {
   return (row, baseline) => {
     const current = resolveAgentStatusBinding(row.paneKey, runtime)
-    if (current.kind === 'unresolved' ||
-      (row.terminalHandle && row.terminalHandle !== current.terminalHandle)) {
+    if (
+      current.kind === 'unresolved' ||
+      (row.terminalHandle && row.terminalHandle !== current.terminalHandle)
+    ) {
       return false
     }
     if (!baseline) {
       return true
     }
     const observed = identities.read(baseline.paneKey)
-    return observed.kind === 'observed' &&
+    return (
+      observed.kind === 'observed' &&
       observed.terminalHandle === current.terminalHandle &&
       observed.processIncarnation === current.processIncarnation
+    )
   }
 }
 
@@ -67,13 +103,18 @@ export function deriveCliWriterTopology<T extends AgentHookEventPayload>(
   }
   const inherited = baseline?.providerSession === binding
   const owner = baseline?.agentPresence?.process
-  if (!newRun && row.connectionId === null &&
+  if (
+    !newRun &&
+    row.connectionId === null &&
     (!sender || !owner || isSameAgentProcess(sender, owner)) &&
-    (!inherited || (baseline.connectionId === null &&
-      baseline.worktreeId === row.worktreeId &&
-      baseline.payload.agentType === row.payload.agentType &&
-      baseline.providerSession?.key === binding.key && baseline.providerSession.id === binding.id)) &&
-    matches?.(row, inherited ? baseline : undefined)) {
+    (!inherited ||
+      (baseline.connectionId === null &&
+        baseline.worktreeId === row.worktreeId &&
+        baseline.payload.agentType === row.payload.agentType &&
+        baseline.providerSession?.key === binding.key &&
+        baseline.providerSession.id === binding.id)) &&
+    matches?.(row, inherited ? baseline : undefined)
+  ) {
     return row
   }
   return { ...row, providerSession: { ...binding } }

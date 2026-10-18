@@ -1,4 +1,4 @@
-import { OPEN_CODE_WRITER_TOPOLOGY, type CliWriterObservation } from './cli-writer-observation'
+import { cliWriterTopology, type CliWriterObservation } from './cli-writer-observation'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import {
@@ -53,9 +53,12 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     const resolved = this.resolvePaneKeyAlias(expected.paneKey)
     const row = this.state.lastStatusByPaneKey.get(resolved)
     if (
-      !row || row.connectionId !== null || row.worktreeId !== expected.worktreeId ||
+      !row ||
+      row.connectionId !== null ||
+      row.worktreeId !== expected.worktreeId ||
       row.providerSession?.id !== expected.providerSession?.id ||
-      row.payload.agentType !== expected.agentType || !('receivedAt' in row) ||
+      row.payload.agentType !== expected.agentType ||
+      !('receivedAt' in row) ||
       row.receivedAt !== expected.receivedAt
     ) {
       return null
@@ -63,20 +66,16 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     const token = this.token
     const generation = this.statusHookGeneration
     const presence = row.agentPresence
-    const binding = row.providerSession
-    const topology = binding && OPEN_CODE_WRITER_TOPOLOGY in binding ? binding[OPEN_CODE_WRITER_TOPOLOGY] : undefined
     return {
-      current: () => this.statusHooksEnabled && this.token === token &&
+      current: () =>
+        this.statusHooksEnabled &&
+        this.token === token &&
         this.statusHookGeneration === generation &&
         this.state.lastStatusByPaneKey.get(resolved) === row &&
         row.agentPresence === presence,
-      presence: () => presence?.process
-        ? probeAgentProcessPresence(presence.process)
-        : Promise.resolve(null),
-      topology: row.source !== 'opencode' && row.source !== 'opencode2' && row.source !== 'mimo-code' &&
-        row.payload.agentType !== 'opencode' && row.payload.agentType !== 'opencode2'
-        ? 'pane-owned'
-        : topology === 'pane-owned' || topology === 'shared' ? topology : 'unverifiable'
+      presence: () =>
+        presence?.process ? probeAgentProcessPresence(presence.process) : Promise.resolve(null),
+      topology: cliWriterTopology(row)
     }
   }
 
