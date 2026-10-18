@@ -1,13 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as EditorAutosave from '@/components/editor/editor-autosave'
 
-const { getState, scheduleReload } = vi.hoisted(() => ({
+const { getState, notify, probeMissing } = vi.hoisted(() => ({
   getState: vi.fn(),
-  scheduleReload: vi.fn()
+  notify: vi.fn(),
+  probeMissing: vi.fn()
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState } }))
-vi.mock('./editor-external-watch-disk-verification', () => ({
-  scheduleDebouncedEditorExternalReload: scheduleReload
+vi.mock('@/components/editor/editor-autosave', async (importOriginal) => ({
+  ...(await importOriginal<typeof EditorAutosave>()),
+  notifyEditorExternalFileChange: notify
+}))
+vi.mock('@/components/editor/editor-restored-tab-conflict-scan', () => ({
+  probeEditorTabFileMissing: probeMissing
 }))
 
 import {
@@ -36,7 +42,7 @@ function tab(id: string, extra: Record<string, unknown> = {}): Record<string, un
 
 const openFiles = [
   tab('dirty.ts', { isDirty: true, lastKnownDiskSignature: 'sig' }),
-  tab('clean.ts'),
+  tab('clean.ts', { lastKnownDiskSignature: 'sig' }),
   tab('preview.md', { mode: 'markdown-preview' }),
   tab('staged.ts', { mode: 'diff', diffSource: 'staged' }),
   tab('deleted.ts', { externalMutation: 'deleted' }),
@@ -55,29 +61,40 @@ const openFiles = [
 
 describe('re-reading tabs after a dropped watch returns', () => {
   const setPendingDiskBaselineVerification = vi.fn()
+  const clearPendingDiskBaselineVerification = vi.fn()
+  const setExternalMutation = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
-    getState.mockReturnValue({ setPendingDiskBaselineVerification, openFiles })
+    probeMissing.mockResolvedValue(false)
+    getState.mockReturnValue({
+      setPendingDiskBaselineVerification,
+      clearPendingDiskBaselineVerification,
+      setExternalMutation,
+      openFiles,
+      gitStatusByWorktree: { wt: [{ path: 'dirty.ts' }, { path: 'only-in-status.ts' }] }
+    })
   })
 
-  it('hands only scan-eligible dirty tabs of the workspace to the conflict scan', () => {
+  it('arms clean and dirty scan-eligible tabs so a later edit waits for the disk check', () => {
     armEditorTabDiskVerification(target)
 
-    expect(setPendingDiskBaselineVerification).toHaveBeenCalledTimes(1)
-    expect(setPendingDiskBaselineVerification).toHaveBeenCalledWith('dirty.ts', true)
-    expect(scheduleReload).not.toHaveBeenCalled()
+    expect(setPendingDiskBaselineVerification.mock.calls).toEqual([
+      ['dirty.ts', true],
+      ['clean.ts', true]
+    ])
+    expect(notify).not.toHaveBeenCalled()
   })
 
-  it('reloads clean file tabs but skips deleted, renamed, combined-diff and virtual tabs', () => {
-    reloadCleanEditorTabs(target)
+  it('reloads clean file tabs but skips deleted, renamed, combined-diff and virtual tabs', async () => {
+    await reloadCleanEditorTabs(target)
 
-    expect(scheduleReload.mock.calls.map(([call]) => call.relativePath)).toEqual([
-      'clean.ts',
-      'preview.md',
-      'staged.ts'
-    ])
-    expect(scheduleReload).toHaveBeenCalledWith({
+    const paths = notify.mock.calls.map(([call]) => call.relativePath)
+    expect(paths).toEqual(expect.arrayContaining(['clean.ts', 'preview.md', 'staged.ts']))
+    for (const skipped of ['deleted.ts', 'renamed.ts', 'combined', 'checks', 'other.ts']) {
+      expect(paths).not.toContain(skipped)
+    }
+    expect(notify).toHaveBeenCalledWith({
       worktreeId: 'wt',
       worktreePath: '/repo',
       relativePath: 'clean.ts',
@@ -86,11 +103,29 @@ describe('re-reading tabs after a dropped watch returns', () => {
     expect(setPendingDiskBaselineVerification).not.toHaveBeenCalled()
   })
 
-  it('scopes the reload to the target host owner', () => {
-    reloadCleanEditorTabs({ ...target, runtimeEnvironmentId: 'env-1' })
+  it('replays git status paths for combined diffs, never touching a dirty tab', async () => {
+    await reloadCleanEditorTabs(target)
 
-    expect(scheduleReload).toHaveBeenCalledTimes(1)
-    expect(scheduleReload).toHaveBeenCalledWith(
+    const paths = notify.mock.calls.map(([call]) => call.relativePath)
+    expect(paths).toContain('only-in-status.ts')
+    expect(paths).not.toContain('dirty.ts')
+  })
+
+  it('marks a file removed while unwatched as deleted instead of reloading it', async () => {
+    probeMissing.mockImplementation(async (_state, file) => file.id === 'clean.ts')
+    await reloadCleanEditorTabs(target)
+
+    expect(setExternalMutation).toHaveBeenCalledWith('clean.ts', 'deleted')
+    expect(clearPendingDiskBaselineVerification).toHaveBeenCalledWith('clean.ts')
+    expect(notify.mock.calls.map(([call]) => call.relativePath)).not.toContain('clean.ts')
+  })
+
+  it('scopes the reload to the target host owner', async () => {
+    getState.mockReturnValue({ openFiles, gitStatusByWorktree: {} })
+    await reloadCleanEditorTabs({ ...target, runtimeEnvironmentId: 'env-1' })
+
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(notify).toHaveBeenCalledWith(
       expect.objectContaining({ relativePath: 'runtime.ts', runtimeEnvironmentId: 'env-1' })
     )
   })

@@ -60,6 +60,8 @@ function stampCleanTabDiskBaseline(id: string, result: FileContent): void {
     const loadedFile = state.openFiles.find((file) => file.id === id)
     if (loadedFile && !loadedFile.isDirty) {
       state.setLastKnownDiskSignature(id, getDiskBaselineSignature(result.content))
+      // Why: a fresh clean baseline is the disk verification a re-watched clean tab was waiting for.
+      state.clearPendingDiskBaselineVerification(id)
     }
   } catch (err) {
     console.warn('[editor] failed to stamp disk baseline', err)

@@ -21,7 +21,7 @@ export function selectWatchEligibleWorkspaceIds(args: {
   if (args.activeWorktreeId) {
     ids.add(args.activeWorktreeId)
   }
-  // Why: a dirty tab can't become dirty in the background, so this set only shrinks there and never needs a handoff.
+  // Why: edits normally happen only in the active workspace; a rare background edit (mobile) just adds a watch, and the rewatch re-check covers what it missed.
   for (const file of args.openFiles) {
     if (file.isDirty && !isVirtualEditorFile(file)) {
       ids.add(file.worktreeId)

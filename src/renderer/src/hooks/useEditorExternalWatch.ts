@@ -74,7 +74,7 @@ export function useEditorExternalWatch(): void {
       if (target.runtimeEnvironmentId) {
         subscribeRuntimeTarget(target, remoteWatchUnsubsRef.current, fsChangedHandlerRef)
         if (missedWrites) {
-          reloadCleanEditorTabs(target)
+          void reloadCleanEditorTabs(target)
         }
         continue
       }

@@ -168,7 +168,8 @@ describe('useEditorPanelContentState', () => {
     mocks.getState.mockReturnValue({
       settings: null,
       openFiles: [],
-      setLastKnownDiskSignature: vi.fn()
+      setLastKnownDiskSignature: vi.fn(),
+      clearPendingDiskBaselineVerification: vi.fn()
     })
   })
 
@@ -317,7 +318,8 @@ describe('useEditorPanelContentState', () => {
     mocks.getState.mockReturnValue({
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
       openFiles: [],
-      setLastKnownDiskSignature: vi.fn()
+      setLastKnownDiskSignature: vi.fn(),
+      clearPendingDiskBaselineVerification: vi.fn()
     })
 
     container = document.createElement('div')
@@ -882,10 +884,12 @@ describe('useEditorPanelContentState', () => {
   it('stamps the disk baseline when a clean tab load resolves', async () => {
     const activeFile = createOpenFile()
     const setLastKnownDiskSignature = vi.fn()
+    const clearPendingDiskBaselineVerification = vi.fn()
     mocks.getState.mockReturnValue({
       settings: null,
       openFiles: [activeFile],
-      setLastKnownDiskSignature
+      setLastKnownDiskSignature,
+      clearPendingDiskBaselineVerification
     })
     mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
 
@@ -902,6 +906,8 @@ describe('useEditorPanelContentState', () => {
         getDiskBaselineSignature('disk content')
       )
     )
+    // Why: the fresh baseline is the disk check a re-watched clean tab waits for.
+    expect(clearPendingDiskBaselineVerification).toHaveBeenCalledWith(activeFile.id)
   })
 
   it('keeps a dirty tab baseline untouched by content loads', async () => {
