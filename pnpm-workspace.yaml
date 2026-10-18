@@ -80,7 +80,7 @@ minimumReleaseAgeExclude:
 shamefullyHoist: true
 
 # One store slot per package version shared by every worktree, instead of a full node_modules each.
-# pnpm turns this off under CI; native builds stay safe via config/scripts/native-build-entry.cjs.
+# .pnpmfile.cjs turns it off under CI and (without opt-in) on Windows; see native-build-entry.cjs.
 enableGlobalVirtualStore: true
 
 # Orca always launches the user's own resolved Claude CLI via

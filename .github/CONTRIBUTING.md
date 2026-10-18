@@ -37,11 +37,12 @@ In PowerShell, use `$env:ORCA_DEV_MAIN_SOURCEMAPS='0'` before `pnpm dev`.
 Remove the variable when debugging the main process with source maps. Renderer and
 preload settings are unaffected; production builds always keep their hidden main maps.
 
-Installs use pnpm's global virtual store: each package version is one slot under
-`~/pnpm/store` (on Windows, `%LOCALAPPDATA%\pnpm\store`) that every worktree links to, instead of
-a full `node_modules` per worktree. An existing worktree converts on its next `pnpm install`,
-and an older branch without the setting converts back the same way. CI always uses the normal
-layout. Two things to know:
+On macOS and Linux, installs use pnpm's global virtual store: each package version is one slot
+under `~/pnpm/store` that every worktree links to, instead of a full `node_modules` per worktree.
+An existing worktree converts on its next `pnpm install`, and an older branch without the setting
+converts back the same way. CI always uses the normal layout. Windows does too unless you set
+`ORCA_PNPM_GLOBAL_VIRTUAL_STORE=1`, because its store links are real symlinks, which may need
+administrator rights or Developer Mode. Two things to know:
 
 - Keep `~/node_modules` (and any other `node_modules` above the store) out of your home
   directory. Node resolves upward from the store slot, so a stray one there supplies
