@@ -1,4 +1,5 @@
 import { BROWSER_HOST_WEBVIEW_CAPABILITY } from './browser-host-capability-selection'
+import { browserHostClientProfileFor } from './browser-host-client-profile-metadata'
 import type { BrowserClientHostCommandResult } from '../../../shared/browser-client-host-protocol'
 import {
   DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS,
@@ -67,6 +68,7 @@ export async function createBrowserHostClientPage(
     const command = {
       type: 'createPage' as const,
       browserProfileId: options.browserProfileId,
+      ...browserHostClientProfileFor(lease, options.browserProfileId),
       executionHostKey: options.executionHostKey,
       ...(options.workspaceId ? { workspaceId: options.workspaceId } : {})
     }

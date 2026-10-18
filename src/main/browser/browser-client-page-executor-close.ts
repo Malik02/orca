@@ -1,19 +1,20 @@
 import type { BrowserClientRetainedPage } from './browser-client-page-retained-state'
 import type { BrowserClientUploadStaging } from './browser-client-upload-staging'
 import { forgetBrowserClientRetainedPage } from './browser-client-page-retained-state'
+import type { BrowserClientProfileSwitches } from './browser-client-page-profile-switch'
 
 export async function closeBrowserClientExecutorPages(input: {
-  retiredProfileCleanups: ReadonlyMap<Promise<void>, BrowserClientRetainedPage>
+  profileSwitches: Pick<BrowserClientProfileSwitches, 'retainedCleanups' | 'stagedPages'>
   creatingPages: ReadonlyMap<string, unknown>
   failedPages: ReadonlyMap<string, unknown>
   pages: Map<string, BrowserClientRetainedPage>
   cleanupPage(page: BrowserClientRetainedPage): Promise<void>
   uploadStaging?: BrowserClientUploadStaging
 }): Promise<void> {
-  const retired = await Promise.allSettled(input.retiredProfileCleanups.keys())
+  const retired = await Promise.allSettled(input.profileSwitches.retainedCleanups)
   const failures: unknown[] = [
     ...retired.filter((result) => result.status === 'rejected').map((result) => result.reason),
-    ...(input.creatingPages.size > 0
+    ...(input.creatingPages.size > 0 || input.profileSwitches.stagedPages.size > 0
       ? [new Error('browser_client_page_creation_still_running')]
       : []),
     ...(input.failedPages.size > 0 ? [new Error('browser_client_page_cleanup_unresolved')] : [])

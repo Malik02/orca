@@ -94,7 +94,16 @@ export function snapshotBrowserHostPageCommand(
   command: BrowserClientHostCommandEvent['command']
 ): BrowserClientHostCommandEvent['command'] {
   if (command.type === 'switchProfile') {
-    return Object.freeze({ ...command, profile: Object.freeze({ ...command.profile }) })
+    return Object.freeze({
+      ...command,
+      profile: Object.freeze({ ...command.profile })
+    })
+  }
+  if ((command.type === 'createPage' || command.type === 'restorePage') && command.profile) {
+    return Object.freeze({
+      ...command,
+      profile: Object.freeze({ ...command.profile })
+    })
   }
   if (command.type === 'reclaimPage') {
     return Object.freeze({

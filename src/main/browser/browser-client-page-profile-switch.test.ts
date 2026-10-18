@@ -9,7 +9,11 @@ const switchCommand = (): BrowserClientHostCommandEvent =>
     command: {
       type: 'switchProfile',
       nextPageHostGeneration: 8,
-      profile: { id: 'remote-isolated', label: 'Remote profile', scope: 'isolated' }
+      profile: {
+        id: 'remote-isolated',
+        label: 'Remote profile',
+        scope: 'isolated'
+      }
     }
   })
 
@@ -40,7 +44,10 @@ describe('staged client page profile switching', () => {
       retired = true
       expect(h.bindReplacement).toHaveBeenCalledWith(
         expect.objectContaining({
-          registration: expect.objectContaining({ webContentsId: 42, pageHostGeneration: 8 })
+          registration: expect.objectContaining({
+            webContentsId: 42,
+            pageHostGeneration: 8
+          })
         })
       )
       return Promise.resolve()
@@ -60,7 +67,11 @@ describe('staged client page profile switching', () => {
           browserProfileId: 'remote-isolated',
           authorityConnectionIdentity: 'authority-record-a'
         }),
-        profileMetadata: { id: 'remote-isolated', label: 'Remote profile', scope: 'isolated' }
+        profileMetadata: {
+          id: 'remote-isolated',
+          label: 'Remote profile',
+          scope: 'isolated'
+        }
       })
     )
   })
@@ -92,7 +103,9 @@ describe('staged client page profile switching', () => {
     expect(h.executor.hasPage('page-a', 7)).toBe(true)
     expect(h.dependencies.routeWebContents.beginGuestRetirement).toHaveBeenCalledTimes(1)
     expect(h.dependencies.routeWebContents.beginGuestRetirement).toHaveBeenCalledWith(
-      expect.objectContaining({ registration: expect.objectContaining({ webContentsId: 42 }) })
+      expect.objectContaining({
+        registration: expect.objectContaining({ webContentsId: 42 })
+      })
     )
     expect(h.dependencies.guestBinding.bind).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -123,7 +136,9 @@ describe('staged client page profile switching', () => {
       }
     ])
     expect(h.dependencies.guestBinding.bind).toHaveBeenLastCalledWith(
-      expect.objectContaining({ registration: expect.objectContaining({ webContentsId: 41 }) })
+      expect.objectContaining({
+        registration: expect.objectContaining({ webContentsId: 41 })
+      })
     )
   })
 
@@ -137,7 +152,9 @@ describe('staged client page profile switching', () => {
     expect(h.executor.hasPage('page-a', 7)).toBe(true)
     expect(h.bindReplacement).not.toHaveBeenCalled()
     expect(h.dependencies.routeWebContents.beginGuestRetirement).toHaveBeenCalledWith(
-      expect.objectContaining({ registration: expect.objectContaining({ webContentsId: 42 }) })
+      expect.objectContaining({
+        registration: expect.objectContaining({ webContentsId: 42 })
+      })
     )
   })
 
@@ -172,6 +189,46 @@ describe('staged client page profile switching', () => {
     await expect(h.executor.close()).rejects.toThrow('Browser client page executor cleanup failed')
   })
 
+  it('fences the staged guest when the connection is fenced during automation retirement', async () => {
+    const h = await fixture()
+    await h.executor.handle(
+      createCommand('navigate', {
+        command: { type: 'navigate', url: 'https://example.com/authenticated' }
+      }),
+      new AbortController().signal
+    )
+    h.dependencies.routeWebContents.navigateGuest.mockClear()
+    h.dependencies.retireAutomation.mockImplementationOnce(async () => {
+      h.executor.fenceNavigation()
+    })
+    expect(await h.executor.handle(switchCommand(), new AbortController().signal)).toMatchObject({
+      status: 'failed',
+      errorCode: 'browser_client_page_executor_closed'
+    })
+    expect(h.dependencies.routeWebContents.revokeNavigation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        registration: expect.objectContaining({ webContentsId: 42 })
+      })
+    )
+    expect(h.dependencies.routeWebContents.navigateGuest).not.toHaveBeenCalled()
+    expect(h.bindReplacement).not.toHaveBeenCalled()
+    expect(h.executor.hasPage('page-a', 7)).toBe(true)
+  })
+
+  it('keeps cleanup evidence when staging fails before handing over its guest', async () => {
+    const h = await fixture()
+    h.dependencies.routeWebContents.registerGuest.mockReturnValueOnce(false)
+    h.dependencies.routeWebContents.beginGuestRetirement.mockImplementationOnce(() => {
+      throw new Error('cleanup refused')
+    })
+    expect(await h.executor.handle(switchCommand(), new AbortController().signal)).toMatchObject({
+      status: 'failed',
+      errorCode: 'browser_client_page_cleanup_failed'
+    })
+    expect(h.executor.hasPage('page-a', 7)).toBe(true)
+    await expect(h.executor.close()).rejects.toThrow('Browser client page executor cleanup failed')
+  })
+
   it('rejects stale generations without preparing or binding anything', async () => {
     const h = await fixture()
     const calls = h.dependencies.routeSessions.preparePage.mock.calls.length
@@ -194,7 +251,9 @@ describe('staged client page profile switching', () => {
     })
     expect(h.executor.hasPage('page-a', 7)).toBe(true)
     expect(h.dependencies.guestBinding.bind).toHaveBeenLastCalledWith(
-      expect.objectContaining({ registration: expect.objectContaining({ webContentsId: 41 }) })
+      expect.objectContaining({
+        registration: expect.objectContaining({ webContentsId: 41 })
+      })
     )
   })
 })

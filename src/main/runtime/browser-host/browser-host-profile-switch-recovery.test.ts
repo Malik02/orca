@@ -4,7 +4,9 @@ import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../shared/browse
 
 afterEach(() => vi.useRealTimers())
 
-function recoveryFixture(result: Promise<{ status: 'completed' }>) {
+function recoveryFixture(
+  result: Promise<{ status: 'completed' } | { status: 'failed'; errorCode: string }>
+) {
   const expected = {
     browserHostClientId: 'client',
     browserHostGeneration: 1,
@@ -19,7 +21,11 @@ function recoveryFixture(result: Promise<{ status: 'completed' }>) {
     retirePage: vi.fn(),
     advancePageGeneration: vi.fn()
   }
-  const grant = { placement: expected, release: vi.fn(), executionHostKey: 'host' }
+  const grant = {
+    placement: expected,
+    release: vi.fn(),
+    executionHostKey: 'host'
+  }
   const placements = {
     getPlacement: vi.fn().mockReturnValue(expected),
     beginPageRetirement: vi.fn().mockReturnValue({}),
@@ -30,6 +36,8 @@ function recoveryFixture(result: Promise<{ status: 'completed' }>) {
     }),
     cancelClientPageReservation: vi.fn()
   }
+  const grants = new Map([['page', grant]])
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: switchBrowserHostClientProfile calls only the ledger, placement and lease members mocked here.
   const input = {
     timeoutMs: 10,
     registry: {
@@ -45,7 +53,7 @@ function recoveryFixture(result: Promise<{ status: 'completed' }>) {
       lease: { authorityRuntimeId: 'runtime', authorityEpoch: 'epoch' }
     }),
     placements,
-    grants: new Map([['page', grant]])
+    grants
   } as unknown as Parameters<typeof switchBrowserHostClientProfile>[2]
   const authority = {
     ...expected,
@@ -53,7 +61,7 @@ function recoveryFixture(result: Promise<{ status: 'completed' }>) {
     authorityRuntimeId: 'runtime',
     authorityEpoch: 'epoch'
   }
-  return { input, authority, ledger, placements }
+  return { input, authority, ledger, placements, grants, grant }
 }
 
 describe('profile switch failure convergence', () => {
@@ -73,6 +81,9 @@ describe('profile switch failure convergence', () => {
     expect(f.placements.completePageRetirement).toHaveBeenCalledOnce()
     expect(f.ledger.retirePage).not.toHaveBeenCalled()
     expect(f.ledger.issue).toHaveBeenCalledTimes(1)
+    // The client may still be switching, so the page cannot be recreated under it yet.
+    expect(f.grants.has('page')).toBe(true)
+    expect(f.grant.release).not.toHaveBeenCalled()
   })
 
   it('orders late-success cleanup behind the original result and preserves its sequence', async () => {
@@ -106,6 +117,35 @@ describe('profile switch failure convergence', () => {
     expect(f.ledger.advancePageGeneration.mock.invocationCallOrder[0]).toBeLessThan(
       f.ledger.issue.mock.invocationCallOrder[1]
     )
+    expect(f.grants.has('page')).toBe(false)
+    expect(f.grant.release).toHaveBeenCalledOnce()
+  })
+
+  it('releases the grant when a timed-out switch later fails on the client', async () => {
+    vi.useFakeTimers()
+    let settle!: (result: { status: 'failed'; errorCode: string }) => void
+    const f = recoveryFixture(
+      new Promise((resolve) => {
+        settle = resolve
+      })
+    )
+    const rejected = expect(
+      switchBrowserHostClientProfile(
+        f.authority,
+        { id: 'isolated', label: 'Isolated', scope: 'isolated' },
+        f.input
+      )
+    ).rejects.toThrow('browser_host_page_creation_timeout')
+    await vi.advanceTimersByTimeAsync(11)
+    await rejected
+    settle({
+      status: 'failed',
+      errorCode: 'browser_client_page_navigation_failed'
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.ledger.issue).toHaveBeenCalledTimes(1)
+    expect(f.grants.has('page')).toBe(false)
+    expect(f.grant.release).toHaveBeenCalledOnce()
   })
 
   it('closes the completed replacement when the host cannot commit it', async () => {
@@ -124,5 +164,7 @@ describe('profile switch failure convergence', () => {
         command: expect.objectContaining({ type: 'closePage' })
       })
     )
+    expect(f.grants.has('page')).toBe(false)
+    expect(f.grant.release).toHaveBeenCalledOnce()
   })
 })

@@ -54,6 +54,13 @@ export async function switchBrowserHostClientProfile(
       )
     }
   }
+  // Why: a held grant blocks recreating the page once its placement is retired.
+  const releaseGrant = () => {
+    if (input.grants.get(authority.browserPageId) === grant) {
+      input.grants.delete(authority.browserPageId)
+      grant.release()
+    }
+  }
   const closeSettledReplacement = () => {
     try {
       ledger.advancePageGeneration(
@@ -100,16 +107,15 @@ export async function switchBrowserHostClientProfile(
       retirePlacement()
       if (completed) {
         closeSettledReplacement()
+        releaseGrant()
       } else if (resultPending) {
-        // Keep the original ledger sequence until the client settles its switch.
-        void resultPending.then(
-          (result) => {
-            if (result.status === 'completed') {
-              closeSettledReplacement()
-            }
-          },
-          () => {}
-        )
+        // Keep the original ledger sequence and grant until the client settles its switch.
+        void resultPending.then((result) => {
+          if (result.status === 'completed') {
+            closeSettledReplacement()
+          }
+          releaseGrant()
+        }, releaseGrant)
       }
     }
     throw error

@@ -1,4 +1,3 @@
-import type { BrowserClientProfileMetadata } from '../../shared/browser-client-profile-switch-protocol'
 import type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
 import {
   cleanupBrowserClientPage,
@@ -42,8 +41,7 @@ export async function createReservedBrowserClientPage(
   event: BrowserClientHostCommandEvent,
   signal: AbortSignal,
   assertAvailable: () => void,
-  commit: (page: BrowserClientRetainedPage) => void,
-  profileMetadata?: BrowserClientProfileMetadata
+  commit: (page: BrowserClientRetainedPage) => void
 ): Promise<BrowserClientRetainedPage> {
   if (event.command.type !== 'createPage') {
     throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
@@ -69,7 +67,7 @@ export async function createReservedBrowserClientPage(
     renderer = dependencies.selectRenderer()
     assertCurrentBrowserClientPageRenderer(renderer)
     routeSession = await dependencies.routeSessions.preparePage({
-      ...(profileMetadata ? { profileMetadata } : {}),
+      ...(event.command.profile ? { profileMetadata: event.command.profile } : {}),
       identity: {
         orcaProfileId: dependencies.orcaProfileId,
         browserProfileId: event.command.browserProfileId,

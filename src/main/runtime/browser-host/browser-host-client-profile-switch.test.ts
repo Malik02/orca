@@ -9,6 +9,7 @@ import {
   BrowserClientProfileMetadata
 } from '../../../shared/browser-client-profile-switch-protocol'
 import { deriveBrowserRoutePartition } from '../../browser/browser-route-identity'
+import { setBrowserHostClientProfileResolver } from './browser-host-client-profile-metadata'
 
 async function fixture(supported = true) {
   const leases = new BrowserHostLeaseRegistry({
@@ -33,7 +34,9 @@ async function fixture(supported = true) {
     release: vi.fn()
   }))
   let guestId = 40
-  h.renderer.mountPage.mockImplementation(async () => ({ webContentsId: ++guestId }))
+  h.renderer.mountPage.mockImplementation(async () => ({
+    webContentsId: ++guestId
+  }))
   const dispatcher = new BrowserClientHostCommandDispatcher({
     authority: { ...lease, pageCommandProtocolVersion: 1 },
     handler: (event, signal) => h.executor.handle(event, signal)
@@ -74,7 +77,11 @@ async function fixture(supported = true) {
   }
 }
 
-const isolated = { id: 'remote-profile', label: 'Remote-only profile', scope: 'isolated' as const }
+const isolated = {
+  id: 'remote-profile',
+  label: 'Remote-only profile',
+  scope: 'isolated' as const
+}
 
 describe('negotiated profile switch over the command transport', () => {
   it('closes a late replacement in sequence through the real ledger and dispatcher', async () => {
@@ -127,7 +134,9 @@ describe('negotiated profile switch over the command transport', () => {
     expect(f.h.executor.hasPage('page-a', next.pageHostGeneration)).toBe(true)
     const switched = f.delivered.mock.calls.at(-1)![0]
     const boundCount = f.bindReplacement.mock.calls.length
-    await expect(f.dispatcher.dispatch(switched)).resolves.toEqual({ status: 'completed' })
+    await expect(f.dispatcher.dispatch(switched)).resolves.toEqual({
+      status: 'completed'
+    })
     expect(f.bindReplacement).toHaveBeenCalledTimes(boundCount)
     expect(
       f.leases.settleClientPageCommand(
@@ -225,9 +234,44 @@ describe('negotiated profile switch over the command transport', () => {
     await f.h.executor.close()
   })
 
+  it.each([
+    [true, isolated],
+    [false, undefined]
+  ])(
+    'recreates a host-owned profile page with its metadata (desktop supports switching: %s)',
+    async (supported, expected) => {
+      setBrowserHostClientProfileResolver((id) => (id === isolated.id ? isolated : undefined))
+      try {
+        const f = await fixture(supported)
+        await f.leases.createClientPage({
+          browserPageId: 'page-b',
+          browserHostClientId: f.authority.browserHostClientId,
+          pairedDeviceId: f.authority.pairedDeviceId,
+          browserProfileId: isolated.id,
+          executionHostKey: 'execution-host-a'
+        })
+        const create = f.delivered.mock.calls.at(-1)![0]
+        expect(create.command).toMatchObject({
+          type: 'createPage',
+          browserProfileId: isolated.id
+        })
+        expect(create.command.profile).toEqual(expected)
+        expect(
+          f.h.dependencies.routeSessions.preparePage.mock.calls.at(-1)![0].profileMetadata
+        ).toEqual(expected)
+        await f.h.executor.close()
+      } finally {
+        setBrowserHostClientProfileResolver(null)
+      }
+    }
+  )
+
   it('rejects arbitrary partition metadata instead of admitting a local cookie jar', () => {
     expect(() =>
-      BrowserClientProfileMetadata.parse({ ...isolated, partition: 'persist:local-default' })
+      BrowserClientProfileMetadata.parse({
+        ...isolated,
+        partition: 'persist:local-default'
+      })
     ).toThrow()
     expect(() => BrowserClientProfileMetadata.parse({ ...isolated, scope: 'unknown' })).toThrow()
     expect(() => BrowserClientProfileMetadata.parse({ ...isolated, id: '' })).toThrow()

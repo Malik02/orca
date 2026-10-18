@@ -5,7 +5,10 @@ import {
   assertBrowserClientPageCommandNotAborted,
   assertCurrentBrowserClientPageRenderer
 } from './browser-client-page-command-admission'
-import { BrowserClientPageCommandError } from './browser-client-page-command-failure'
+import {
+  BrowserClientPageCommandError,
+  isBrowserClientPageCleanupFailure
+} from './browser-client-page-command-failure'
 import type { BrowserClientPageCommandExecutorDependencies } from './browser-client-page-command-executor-dependencies'
 import { createReservedBrowserClientPage } from './browser-client-page-creation'
 import type { BrowserClientRetainedPage } from './browser-client-page-retained-state'
@@ -14,15 +17,14 @@ import { updateBrowserClientPageInventoryCurrentUrl } from './browser-client-pag
 export async function switchBrowserClientPageProfile(input: {
   event: BrowserClientHostCommandEvent
   signal: AbortSignal
-  retainedCleanups: Map<Promise<void>, BrowserClientRetainedPage>
+  switches: BrowserClientProfileSwitches
   pages: Map<string, BrowserClientRetainedPage>
   dependencies: BrowserClientPageCommandExecutorDependencies
   assertAvailable(): void
   commit(page: BrowserClientRetainedPage): void
-  cleanup(page: BrowserClientRetainedPage): Promise<void>
-  retirePrevious(page: BrowserClientRetainedPage): Promise<void>
+  cleanup(page: BrowserClientRetainedPage, releaseUploads: boolean): Promise<void>
 }): Promise<void> {
-  const { event, signal, dependencies } = input
+  const { event, signal, dependencies, switches } = input
   if (event.command.type !== 'switchProfile') {
     throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
   }
@@ -50,6 +52,7 @@ export async function switchBrowserClientPageProfile(input: {
     command: {
       type: 'createPage',
       browserProfileId: profile.id,
+      profile,
       executionHostKey: old.inventory.executionHostKey,
       ...(old.inventory.workspaceId ? { workspaceId: old.inventory.workspaceId } : {})
     }
@@ -57,6 +60,7 @@ export async function switchBrowserClientPageProfile(input: {
   let staged: BrowserClientRetainedPage | undefined
   let bindingAttempted = false
   old.reconciling = true
+  switches.stagedPages.set(event.browserPageId, null)
   try {
     await createReservedBrowserClientPage(
       {
@@ -70,8 +74,8 @@ export async function switchBrowserClientPageProfile(input: {
       input.assertAvailable,
       (page) => {
         staged = page
-      },
-      profile
+        switches.stagedPages.set(event.browserPageId, page)
+      }
     )
     if (!staged || staged.registration.partition === old.registration.partition) {
       throw new BrowserClientPageCommandError('browser_client_page_profile_partition_conflict')
@@ -85,8 +89,15 @@ export async function switchBrowserClientPageProfile(input: {
       pageHostGeneration: old.generation,
       registration: old.registration
     })
+    // A fence that landed during that await must stop the staged guest before it navigates.
+    assertBrowserClientPageCommandNotAborted(signal)
+    input.assertAvailable()
+    assertCurrentBrowserClientPageRenderer(staged.renderer)
     bindingAttempted = true
-    bindReplacement({ registration: staged.registration, browserProfileId: profile.id })
+    bindReplacement({
+      registration: staged.registration,
+      browserProfileId: profile.id
+    })
     const url = old.inventory.currentUrl
     if (url && url !== 'about:blank') {
       if (!(await dependencies.routeWebContents.navigateGuest(staged.lifecycleClaim, url))) {
@@ -104,12 +115,18 @@ export async function switchBrowserClientPageProfile(input: {
   } catch (error) {
     try {
       if (staged) {
-        const cleanup = input.cleanup(staged)
-        input.retainedCleanups.set(cleanup, staged)
+        const cleanup = input.cleanup(staged, false)
+        switches.retainedCleanups.add(cleanup)
         await cleanup
-        input.retainedCleanups.delete(cleanup)
+        switches.retainedCleanups.delete(cleanup)
+      } else if (isBrowserClientPageCleanupFailure(error)) {
+        // Staging failed before handing over its guest; keep the unreleased resources visible to close.
+        const unresolved = Promise.reject(error)
+        unresolved.catch(() => {})
+        switches.retainedCleanups.add(unresolved)
       }
     } finally {
+      switches.stagedPages.delete(event.browserPageId)
       old.reconciling = false
       if (bindingAttempted && old.lifecycleClaim.isCurrent()) {
         dependencies.guestBinding.bind({
@@ -120,21 +137,33 @@ export async function switchBrowserClientPageProfile(input: {
     }
     throw error
   }
+  switches.stagedPages.delete(event.browserPageId)
   old.reconciling = false
-  await input.retirePrevious(old)
+  await switches.retire(old, (page) => input.cleanup(page, true))
 }
 
-export async function retireSwitchedBrowserClientPage(
-  page: BrowserClientRetainedPage,
-  cleanupPage: (page: BrowserClientRetainedPage) => Promise<void>,
-  retained: Map<Promise<void>, BrowserClientRetainedPage>
-): Promise<void> {
-  const cleanup = cleanupPage(page)
-  retained.set(cleanup, page)
-  try {
-    await cleanup
-    retained.delete(cleanup)
-  } catch (error) {
-    console.warn('[browser-client-page] Replaced guest cleanup remains unresolved', error)
+/** Profile-switch state the executor's fencing and close must also see. */
+export class BrowserClientProfileSwitches {
+  readonly retainedCleanups = new Set<Promise<void>>()
+  /** In-flight switches by page; the staged guest once mounted. */
+  readonly stagedPages = new Map<string, BrowserClientRetainedPage | null>()
+
+  // Why: a staged guest holds a navigation grant before it replaces the page.
+  navigationClaims(pages: Iterable<BrowserClientRetainedPage>): BrowserClientRetainedPage[] {
+    return [...pages, ...[...this.stagedPages.values()].filter((page) => page !== null)]
+  }
+
+  async retire(
+    page: BrowserClientRetainedPage,
+    cleanupPage: (page: BrowserClientRetainedPage) => Promise<void>
+  ): Promise<void> {
+    const cleanup = cleanupPage(page)
+    this.retainedCleanups.add(cleanup)
+    try {
+      await cleanup
+      this.retainedCleanups.delete(cleanup)
+    } catch (error) {
+      console.warn('[browser-client-page] Replaced guest cleanup remains unresolved', error)
+    }
   }
 }

@@ -1,7 +1,7 @@
 import { closeBrowserClientExecutorPages } from './browser-client-page-executor-close'
 import {
-  switchBrowserClientPageProfile,
-  retireSwitchedBrowserClientPage
+  BrowserClientProfileSwitches,
+  switchBrowserClientPageProfile
 } from './browser-client-page-profile-switch'
 import {
   BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES,
@@ -48,7 +48,7 @@ export class BrowserClientPageCommandExecutor {
   private readonly pages = new Map<string, BrowserClientRetainedPage>()
   private readonly creatingPages = new Map<string, BrowserClientHostedPageInventory>()
   private readonly failedPages = new Map<string, BrowserClientHostedPageInventory>()
-  private readonly retiredProfileCleanups = new Map<Promise<void>, BrowserClientRetainedPage>()
+  private readonly profileSwitches = new BrowserClientProfileSwitches()
   private readonly navigationFence = new BrowserClientPageNavigationFence()
   private closePromise: Promise<void> | null = null
   private authorityConnectionIdentity: string
@@ -74,13 +74,19 @@ export class BrowserClientPageCommandExecutor {
     signal: AbortSignal
   ): Promise<BrowserClientHostCommandResult> {
     if (this.closed || this.authorityTransitioning || this.navigationFence.isFenced) {
-      return { status: 'failed', errorCode: 'browser_client_page_executor_closed' }
+      return {
+        status: 'failed',
+        errorCode: 'browser_client_page_executor_closed'
+      }
     }
     try {
       const value = await this.executeCommand(event, signal)
       return value === undefined ? { status: 'completed' } : { status: 'completed', value }
     } catch (error) {
-      return { status: 'failed', errorCode: browserClientPageCommandFailureCode(error, signal) }
+      return {
+        status: 'failed',
+        errorCode: browserClientPageCommandFailureCode(error, signal)
+      }
     }
   }
 
@@ -93,7 +99,7 @@ export class BrowserClientPageCommandExecutor {
         return switchBrowserClientPageProfile({
           event,
           signal,
-          retainedCleanups: this.retiredProfileCleanups,
+          switches: this.profileSwitches,
           pages: this.pages,
           dependencies: {
             ...this.dependencies,
@@ -103,13 +109,7 @@ export class BrowserClientPageCommandExecutor {
           assertAvailable: () =>
             this.navigationFence.assertAvailable(this.closed || this.authorityTransitioning),
           commit: (page) => publishBrowserClientRetainedPage(this.dependencies, this.pages, page),
-          cleanup: (page) => this.cleanupPage(page, undefined, false),
-          retirePrevious: (page) =>
-            retireSwitchedBrowserClientPage(
-              page,
-              (old) => this.cleanupPage(old),
-              this.retiredProfileCleanups
-            )
+          cleanup: (page, releaseUploads) => this.cleanupPage(page, undefined, releaseUploads)
         })
       case 'createPage':
         return this.createPage(event, signal)
@@ -185,15 +185,16 @@ export class BrowserClientPageCommandExecutor {
   close(): Promise<void> {
     this.closed = true
     return (this.closePromise ??= this.navigationFence.fenceBeforeCleanup(
-      this.pages.values(),
+      this.profileSwitches.navigationClaims(this.pages.values()),
       (claim) => this.dependencies.routeWebContents.revokeNavigation(claim),
       () => this.closePages()
     ))
   }
 
   fenceNavigation(): void {
-    this.navigationFence.fence(this.pages.values(), (claim) =>
-      this.dependencies.routeWebContents.revokeNavigation(claim)
+    this.navigationFence.fence(
+      this.profileSwitches.navigationClaims(this.pages.values()),
+      (claim) => this.dependencies.routeWebContents.revokeNavigation(claim)
     )
   }
 
@@ -202,8 +203,9 @@ export class BrowserClientPageCommandExecutor {
       throw new Error('browser_client_page_authority_transition_unavailable')
     }
     this.authorityTransitioning = true
-    this.navigationFence.revoke(this.pages.values(), (claim) =>
-      this.dependencies.routeWebContents.revokeNavigation(claim)
+    this.navigationFence.revoke(
+      this.profileSwitches.navigationClaims(this.pages.values()),
+      (claim) => this.dependencies.routeWebContents.revokeNavigation(claim)
     )
   }
 
@@ -305,7 +307,7 @@ export class BrowserClientPageCommandExecutor {
 
   private closePages(): Promise<void> {
     return closeBrowserClientExecutorPages({
-      retiredProfileCleanups: this.retiredProfileCleanups,
+      profileSwitches: this.profileSwitches,
       creatingPages: this.creatingPages,
       failedPages: this.failedPages,
       pages: this.pages,
