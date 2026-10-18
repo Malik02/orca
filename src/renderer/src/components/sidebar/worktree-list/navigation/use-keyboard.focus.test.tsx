@@ -8,16 +8,8 @@ import type { HostSectionRow } from '../../host-section-rows'
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
 import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import type { KeybindingOverrides } from '../../../../../../shared/keybindings'
 
-const state: {
-  keybindings: KeybindingOverrides | undefined
-  activeView: string
-  activeTabType: string
-  activeWorktreeId: string
-  activeTabId: string
-  tabsByWorktree: Record<string, { id: string }[]>
-} = {
+const state = {
   keybindings: undefined,
   activeView: 'terminal',
   activeTabType: 'terminal',
@@ -112,6 +104,8 @@ function press(key: string, init: KeyboardEventInit = {}, target: HTMLElement = 
     cancelable: true,
     ...init
   })
+  // Why: happy-dom reports AltGraph for any Alt; Chromium only for a real AltGr key.
+  Object.defineProperty(event, 'getModifierState', { value: () => false })
   act(() => {
     target.dispatchEvent(event)
   })
@@ -218,51 +212,32 @@ describe('workspace list focus ownership', () => {
     }
   )
 
-  it('runs the bound worktree shortcut from a text field and leaves plain arrows alone', () => {
+  it('leaves the default chord to text fields and runs a user-bound one', () => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mac')
     const composer = document.createElement('div')
     composer.contentEditable = 'true'
-    document.body.append(composer)
-    composer.focus()
-    press('ArrowDown', {}, composer)
-    expect(activate).not.toHaveBeenCalled()
-
-    const chord = press('ArrowDown', { metaKey: true, shiftKey: true }, composer)
-    expect(chord.defaultPrevented).toBe(true)
-    expect(activate).toHaveBeenLastCalledWith('b', {
-      navigationIntent: 'user-open',
-      revealInSidebar: false,
-      executionHostId: 'ssh:fixture'
-    })
-
-    activate.mockClear()
     const editor = document.createElement('div')
     editor.className = 'monaco-editor'
-    const field = document.createElement('textarea')
-    editor.append(field)
-    document.body.append(editor)
-    let reachedField = false
-    field.addEventListener('keydown', () => {
-      reachedField = true
-    })
-    field.focus()
-    press('ArrowDown', { metaKey: true, shiftKey: true }, field)
-    expect(reachedField).toBe(false)
-    expect(activate).toHaveBeenCalled()
+    const field = editor.appendChild(document.createElement('textarea'))
+    const reachedField = vi.fn()
+    field.addEventListener('keydown', reachedField)
+    document.body.append(composer, editor)
+    const fieldKeepsChord = (target: HTMLElement) =>
+      !press('ArrowDown', { metaKey: true, shiftKey: true }, target).defaultPrevented
+    expect([composer, field].map(fieldKeepsChord)).toEqual([true, true])
 
-    activate.mockClear()
-    state.activeWorktreeId = 'a'
-    state.activeTabId = 'tab-a'
-    state.keybindings = { 'worktree.navigateDown': ['Ctrl+Alt+ArrowDown'] }
-    act(() => root.render(null))
+    const navigateDown = ['Mod+Shift+ArrowDown', 'Ctrl+Alt+ArrowDown', 'Alt+L']
+    Object.assign(state, { keybindings: { 'worktree.navigateDown': navigateDown } })
     act(() => root.render(<Probe />))
-    composer.focus()
-    press('ArrowDown', { ctrlKey: true, altKey: true }, composer)
-    expect(activate).toHaveBeenLastCalledWith('b', {
-      navigationIntent: 'user-open',
-      revealInSidebar: false,
-      executionHostId: 'ssh:fixture'
-    })
+    expect([composer, field].map(fieldKeepsChord)).toEqual([true, true])
+    // Option+L composes a character on Mac, so the field keeps it even when bound.
+    press('¬', { code: 'KeyL', altKey: true }, composer)
+    expect(activate).not.toHaveBeenCalled()
+    for (const target of [composer, field]) {
+      press('ArrowDown', { ctrlKey: true, altKey: true }, target)
+    }
+    expect(activate.mock.calls.map(([id]) => id)).toEqual(['b', 'c'])
+    expect(reachedField).toHaveBeenCalledTimes(2)
   })
 
   it('does not navigate while an application modal is active', () => {

@@ -1,4 +1,4 @@
-import { fileSearchClaimsTextKey } from '@/lib/file-search-shortcut-policy'
+import { textFieldClaimsActionKey } from '@/lib/file-search-shortcut-policy'
 import { useCallback, useEffect } from 'react'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
@@ -100,31 +100,29 @@ export function useWorktreeListKeyboardNavigation(args: {
       }
 
       const platform = getShortcutPlatform()
-      // Why: previous/next worktree is a window command, so the chord the user bound runs even when a text field is focused.
+      if (
+        keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings) &&
+        !textFieldClaimsActionKey(e, 'sidebar.focusWorktreeList') &&
+        !hasVisibleOverlay()
+      ) {
+        scrollRef.current?.focus()
+        e.preventDefault()
+        return
+      }
+
       const direction = keybindingMatchesAction('worktree.navigateUp', e, platform, keybindings)
         ? 'up'
         : keybindingMatchesAction('worktree.navigateDown', e, platform, keybindings)
           ? 'down'
           : null
-      if (direction && !hasVisibleOverlay()) {
+      const directionAction = direction === 'up' ? 'worktree.navigateUp' : 'worktree.navigateDown'
+      if (direction && !textFieldClaimsActionKey(e, directionAction) && !hasVisibleOverlay()) {
         endListNavigation()
         markDirectScrollInput()
         navigateWorktree(direction)
         e.preventDefault()
+        // Why: a user-bound chord fired from a field must not also reach the field's own handler.
         e.stopPropagation()
-        return
-      }
-
-      if (fileSearchClaimsTextKey(e)) {
-        return
-      }
-
-      if (
-        keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings) &&
-        !hasVisibleOverlay()
-      ) {
-        scrollRef.current?.focus()
-        e.preventDefault()
       }
     }
 
