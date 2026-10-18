@@ -54,9 +54,6 @@ vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('./MobileAgentWorkingIndicator', () => ({
-  MobileAgentWorkingIndicator: 'WorkingIndicator'
-}))
 
 // Stand-in composer: exposes the view's `handleSend` through a pressable, which is
 // the only composer behaviour these banner tests exercise.
@@ -192,11 +189,6 @@ describe('MobileNativeChatView', () => {
         : null
     }
 
-    /** The bridge cue stays outside the scrolling transcript. */
-    function workingIndicators(): unknown[] {
-      return renderer!.root.findAll((node) => String(node.type) === 'WorkingIndicator')
-    }
-
     it('puts the clock bar under the prompt, activity at the tail, and drops the three dots', async () => {
       const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'still working')]
       await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
@@ -207,7 +199,6 @@ describe('MobileNativeChatView', () => {
       expect(footerProps()).toEqual({ thinking: false, activityText: null, stopping: false })
       expect(listIds().at(-1)).toBe('a1')
       expect(props.activeTurnIsWorking).toBe(true)
-      expect(workingIndicators()).toHaveLength(0)
     })
 
     it.each([
@@ -318,22 +309,16 @@ describe('MobileNativeChatView', () => {
       expect(footerProps()).toMatchObject({ activityText: 'Running pnpm test' })
     })
 
-    it('keeps the bridge lane on the three-dot indicator with no turn status', async () => {
+    it('gives the bridge lane the same live Working line, with no turn status', async () => {
       const folded = [userTurn('u1', 'go')]
       await render({ messages: folded, folded, agentWorking: true })
       const props = rowProps('u1')
       expect(props.structuredActivityUi).toBe(false)
       expect(props.turnStatus).toBeNull()
       expect(props.activeTurnIsWorking).toBe(false)
-      expect(footerProps()).toBeNull()
-      expect(workingIndicators()).toHaveLength(1)
-      expect(
-        renderer!.root.find((node) => String(node.type) === 'WorkingIndicator').parent?.props
-          .pointerEvents
-      ).toBe('none')
+      expect(footerProps()).toEqual({ thinking: false, activityText: null, stopping: false })
       const list = renderer!.root.find((node) => String(node.type) === 'FlatList')
-      expect(list.props.ListFooterComponent).toBeNull()
-      expect(list.props.contentContainerStyle).toBe(styles.listContentUnderFloatingControls)
+      expect(list.props.contentContainerStyle).toBe(styles.listContent)
     })
 
     it('settles the finished turn to a tappable duration', async () => {

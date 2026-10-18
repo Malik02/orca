@@ -41,12 +41,16 @@ function admissionFor(args: AdmittedSpawnArgs): TerminalPaneAdmission {
     ...(row?.viewMode ? { viewMode: row.viewMode } : {}),
     ...(row?.customTitle ? { title: row.customTitle } : {}),
     ...(args.cwd || args.launchAgent || args.launchRuntime?.pty.shellOverride
-      ? { creation: {
-          ...(args.cwd ? { startupCwd: args.cwd } : {}),
-          ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
-          ...(args.launchRuntime?.pty.shellOverride
-            ? { shellOverride: args.launchRuntime.pty.shellOverride } : {})
-        } } : {})
+      ? {
+          creation: {
+            ...(args.cwd ? { startupCwd: args.cwd } : {}),
+            ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
+            ...(args.launchRuntime?.pty.shellOverride
+              ? { shellOverride: args.launchRuntime.pty.shellOverride }
+              : {})
+          }
+        }
+      : {})
   }
 }
 

@@ -40,6 +40,8 @@ export type LayoutCommand =
       viewMode?: 'terminal' | 'chat'
       /** When the window drew the tab, so a later save of it matches main's copy. */
       createdAt?: number
+      /** A quick command tab's label, so a later save of it matches main's copy. */
+      quickCommandLabel?: string
       creation?: Partial<LayoutTerminalCreation>
       initial?: InitialSurfaceReason
       split?: NewGroupSplit
@@ -119,9 +121,23 @@ export type LayoutCommand =
       preview?: boolean
       /** Editor tabs whose view reported an unsaved draft: a preview among them is not replaced. */
       dirtyTabIds?: string[]
+      /** When the window drew the tab, so a later save of it matches main's copy. */
+      createdAt?: number
       split?: NewGroupSplit
     })
   | (On & { type: 'promotePreviewTab'; tabId: string })
+  | (On & {
+      type: 'openSimulatorTab'
+      /** The window's id for the tab it drew; also the tab's entity. */
+      tabId: string
+      groupId?: string
+      /** Placement in the group: after this tab, else at this index, else at its end. */
+      afterTabId?: string
+      index?: number
+      /** When the window drew the tab, so a later save of it matches main's copy. */
+      createdAt?: number
+      split?: NewGroupSplit
+    })
   | (On & {
       type: 'moveTabToWorkspace'
       /** The workspace that owns the tabs' file, as the window resolved it; same partition. */
@@ -150,6 +166,9 @@ export type LayoutCommand =
       /** The window's own ids for a tab it drew: its tab-bar entry and its browser record. */
       tabId?: string
       browserTabId?: string
+      /** When the window drew the tab-bar entry and the browser record, so its later save matches. */
+      createdAt?: number
+      browserCreatedAt?: number
       split?: NewGroupSplit
     })
   | (On & { type: 'openBrowserPage'; browserTabId: string; pageId: string })
@@ -169,12 +188,27 @@ export type LayoutCommand =
       sessionId: string
       agent: AgentType
       groupId?: string
+      /** Placement in the group: after this tab, else at this index, else at its end. */
+      afterTabId?: string
+      index?: number
+      /** When the window drew the tab, so a later save of it matches main's copy. */
+      createdAt?: number
       initial?: InitialSurfaceReason
+      split?: NewGroupSplit
     })
   | (On & { type: 'startPane'; paneKey: string })
   | (On & { type: 'restartPane'; paneKey: string })
-  | (On & { type: 'sleep'; paneKeys?: string[]; records: SleepingAgentSessionRecord[] })
-  | (On & { type: 'wake'; paneKeys?: string[] })
+  | (On & {
+      type: 'sleep'
+      paneKeys?: string[]
+      records: SleepingAgentSessionRecord[]
+      /** Records how each agent resumes and stops nothing: the window's live and quit captures. */
+      recordOnly?: true
+    })
+  /** `recordOnly`: drops the records and starts nothing. */
+  | (On & { type: 'wake'; paneKeys?: string[]; recordOnly?: true })
+  /** The workspace's default tabs were applied (or it had none): never apply them again. */
+  | (On & { type: 'setDefaultTabsApplied' })
 
 /**
  * Why a workspace's first surface is asked for: `restore` at relaunch, `activation` when a user
@@ -195,9 +229,15 @@ export type GroupSide = 'left' | 'right' | 'up' | 'down'
 
 /**
  * An open into a new group, named by the command's `groupId`, split off `besideGroupId`: the
- * group and its first tab are made in one step, so no empty group is ever stored.
+ * group and its first tab are made in one step, so no empty group is ever stored. With
+ * `besideLastGroupId`, the split is off the branch from `besideGroupId` to it (its first and last
+ * groups), as when a group the window kept empty sits beside a branch split since.
  */
-export type NewGroupSplit = { besideGroupId: string; direction: GroupSide }
+export type NewGroupSplit = {
+  besideGroupId: string
+  besideLastGroupId?: string
+  direction: GroupSide
+}
 
 export type TabTitle =
   | { kind: 'custom' | 'generated'; title: string | null }
@@ -251,12 +291,14 @@ export type LayoutApplyOutcome =
 
 /**
  * `layout.apply`'s reply. `host_not_owned`: a paired server owns that workspace's layout.
- * `other_partition`: a move's two workspaces are in different host partitions. `frameSeq`: the
- * layout stream position whose frames hold the command's effect (absent from older hosts).
+ * `other_partition`: a move's two workspaces are in different host partitions.
+ * `wsl_move_in_progress`: a WSL move has paused the workspace (older windows log it as refused).
+ * `frameSeq`: the layout stream position whose frames hold the command's effect (absent from
+ * older hosts).
  */
 export type LayoutApplyReply = (
   | LayoutApplyOutcome
-  | { ok: false; code: 'host_not_owned' | 'other_partition' }
+  | { ok: false; code: 'host_not_owned' | 'other_partition' | 'wsl_move_in_progress' }
 ) & { frameSeq?: number }
 
 export type LayoutContext = {

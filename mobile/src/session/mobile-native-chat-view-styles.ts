@@ -43,9 +43,6 @@ export const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   },
-  workingPill: {
-    paddingHorizontal: 0
-  },
   pressed: {
     opacity: 0.6
   },

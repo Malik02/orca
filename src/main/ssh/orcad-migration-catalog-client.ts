@@ -26,6 +26,8 @@ import { parsePairingCode } from '../../shared/pairing'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime-client'
+import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../shared/remote-runtime-memory-limits'
+import { describeOversizedOrcadMigrationPayload } from './orcad-migration-manifest-export'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { hasExtraAgentArgs } from '../../shared/automation-extra-agent-args'
@@ -47,11 +49,14 @@ export const ORCAD_MIGRATION_DESTINATION_EXTRA_AGENT_ARGS_UNSUPPORTED =
 export const ORCAD_MIGRATION_DESTINATION_SOURCE_KIND_UNSUPPORTED =
   'orcad_migration_destination_source_kind_unsupported:Update Orca on this host to move this project to it.'
 
-type CatalogRequestOptions = {
+export type CatalogRequestOptions = {
   signal?: AbortSignal
   timeoutMs?: number
   expectedRuntimeId?: string
 }
+
+// Request id, device token, method name and JSON framing around the params.
+const REQUEST_ENVELOPE_RESERVE_BYTES = 1024
 
 const METHOD_BY_OPERATION: Record<OrcadCatalogMigrationOperation, string> = {
   abort: 'orcad.migration.abortCatalog',
@@ -153,6 +158,24 @@ export async function stageRemoteOrcadMigrationBlobChunk(
   return parseOrcadMigrationBlobChunkResult(response.result, request)
 }
 
+/** One `*.list` read of the server's own rows, through the same migration preflight. */
+export async function listServerRows(
+  pairingCode: string,
+  method: string,
+  rows: string,
+  options: CatalogRequestOptions
+): Promise<unknown> {
+  const pairing = parsePairingCode(pairingCode)
+  if (!pairing) {
+    throw new Error('orcad_migration_pairing_code_invalid')
+  }
+  const response = await sendSupportedMigrationRequest(pairing, method, undefined, options)
+  if (!response.ok) {
+    throw new Error(`orcad_migration_${rows}_failed:${response.error.message}`)
+  }
+  return response.result
+}
+
 // Every orcad's repo.list returns stored rows whole, so a row without host fields is its own.
 const ServerRepositoriesSchema = z.object({
   repos: z.array(
@@ -160,7 +183,8 @@ const ServerRepositoriesSchema = z.object({
       id: z.string().min(1),
       path: z.string().min(1),
       connectionId: z.string().nullish(),
-      executionHostId: z.string().nullish()
+      executionHostId: z.string().nullish(),
+      projectGroupId: z.string().nullish()
     })
   )
 })
@@ -170,20 +194,14 @@ export async function listRemoteOrcadRepositories(
   pairingCode: string,
   options: CatalogRequestOptions = {}
 ): Promise<OrcadServerRepository[]> {
-  const pairing = parsePairingCode(pairingCode)
-  if (!pairing) {
-    throw new Error('orcad_migration_pairing_code_invalid')
-  }
-  const response = await sendSupportedMigrationRequest(pairing, 'repo.list', undefined, options)
-  if (!response.ok) {
-    throw new Error(`orcad_migration_repositories_failed:${response.error.message}`)
-  }
-  return ServerRepositoriesSchema.parse(response.result).repos.map(
-    ({ id, path, connectionId, executionHostId }) => ({
+  const result = await listServerRows(pairingCode, 'repo.list', 'repositories', options)
+  return ServerRepositoriesSchema.parse(result).repos.map(
+    ({ id, path, connectionId, executionHostId, projectGroupId }) => ({
       id,
       path,
       ...(connectionId != null ? { connectionId } : {}),
-      ...(executionHostId != null ? { executionHostId } : {})
+      ...(executionHostId != null ? { executionHostId } : {}),
+      ...(projectGroupId != null ? { projectGroupId } : {})
     })
   )
 }
@@ -209,6 +227,22 @@ async function request(
   if (!pairing) {
     throw new Error('orcad_migration_pairing_code_invalid')
   }
+  // Only with blobs: SSH and blob-free moves keep sending exactly `{ manifest }`.
+  const params = expectedBlobs.length > 0 ? { manifest, expectedBlobs } : { manifest }
+  // A manifest under the validation cap can still overflow the host's sealed frame (more so with
+  // expectedBlobs); the host would answer by closing the socket, so refuse before sending.
+  const paramsBytes = Buffer.byteLength(JSON.stringify(params), 'utf8')
+  if (
+    paramsBytes + REQUEST_ENVELOPE_RESERVE_BYTES >
+    REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES
+  ) {
+    throw new Error(
+      describeOversizedOrcadMigrationPayload(
+        manifest.payload,
+        REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES - REQUEST_ENVELOPE_RESERVE_BYTES
+      )
+    )
+  }
   const carriesExtraAgentArgs =
     (operation === 'stage' || operation === 'commit') &&
     (manifest.payload.dormantState?.automations ?? []).some((automation) =>
@@ -217,8 +251,7 @@ async function request(
   const response = await sendSupportedMigrationRequest(
     pairing,
     METHOD_BY_OPERATION[operation],
-    // Only with blobs: SSH and blob-free moves keep sending exactly `{ manifest }`.
-    expectedBlobs.length > 0 ? { manifest, expectedBlobs } : { manifest },
+    params,
     options,
     carriesExtraAgentArgs,
     // Every operation: an older destination would parse a non-SSH source as malformed or as SSH.

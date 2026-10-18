@@ -82,6 +82,7 @@ export function moveTabToWorkspace(
     const end = target.groups.find((group) => group.id === command.groupId)!.tabOrder.length
     target = placeNewTab(
       target,
+      toKey,
       { ...tab, id: newTabId, entityId: newEntityId },
       { groupId: command.groupId, index: end },
       context

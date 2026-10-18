@@ -34,8 +34,50 @@ export function recordOpenedEditorTabInLayoutOwner(state: EditorOwnerState, tab:
     // Open to the side: main makes the window's new split with the tab.
     ...newGroupSplitOf(state, tab.worktreeId, tab.groupId, tab.id),
     ...(tab.isPreview ? { preview: true } : {}),
+    createdAt: tab.createdAt,
     // Only edit-mode files are restored after restart; the window saves no other.
     ...(file?.mode === 'edit' ? { file: restorableEditorFile(file) } : {})
+  })
+}
+
+/**
+ * An open the window drew in a tab it already had, read off the store before and after. A record
+ * it rewrote in place (View Log made writable, a conflict open) reaches main, which keeps the tab.
+ */
+export function recordReopenedEditorFileInLayoutOwner(
+  before: EditorOwnerState,
+  after: EditorOwnerState,
+  worktreeId: string,
+  tabId: string
+): void {
+  const tab = after.unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)
+  const reused = before.unifiedTabsByWorktree[worktreeId]?.some((entry) => entry.id === tabId)
+  if (!tab || !reused || !isEditorTabContentType(tab.contentType)) {
+    return
+  }
+  const fileIn = (state: EditorOwnerState): OpenFile | undefined =>
+    state.openFiles.find(
+      (candidate) => candidate.id === tab.entityId && candidate.worktreeId === worktreeId
+    )
+  const now = fileIn(after)
+  if (now?.mode !== 'edit') {
+    return
+  }
+  const was = fileIn(before)
+  const file = restorableEditorFile(now)
+  // One builder makes both records, so their key order matches.
+  if (was?.mode === 'edit' && JSON.stringify(restorableEditorFile(was)) === JSON.stringify(file)) {
+    return
+  }
+  recordLayoutApply(after, worktreeId, {
+    type: 'openEditorTab',
+    tabId: tab.id,
+    fileId: tab.entityId,
+    contentType: tab.contentType,
+    groupId: tab.groupId,
+    ...(tab.isPreview ? { preview: true } : {}),
+    createdAt: tab.createdAt,
+    file
   })
 }
 
@@ -95,49 +137,30 @@ export function recordDroppedEditorFilesInLayoutOwner(
   }
 }
 
-/** Where a reopened editor tab ended up once the window restored its old position. */
-export function recordReopenedEditorTabPositionInLayoutOwner(
-  state: EditorOwnerState,
-  worktreeId: string,
-  fileId: string,
-  groupId: string | undefined
-): void {
-  const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-    (candidate) =>
-      candidate.entityId === fileId &&
-      isEditorTabContentType(candidate.contentType) &&
-      (groupId === undefined || candidate.groupId === groupId)
-  )
-  const group = tab
-    ? (state.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === tab.groupId)
-    : undefined
-  const index = tab && group ? group.tabOrder.indexOf(tab.id) : -1
-  if (tab && group && index !== -1) {
-    recordLayoutApply(state, worktreeId, {
-      type: 'moveTab',
-      tabId: tab.id,
-      toGroupId: group.id,
-      index
-    })
-  }
-}
-
 /**
  * Restored editor tabs the window just moved to the workspace that owns their file (F42), read
- * off the store before and after the move. A host change within one workspace sends nothing: only
- * a paired server's tabs do that, and main does not own their layout.
+ * off the store before and after the move. A re-own within one workspace is a rename in place;
+ * main skips it for a paired server's tabs, whose layout it does not own.
  */
 export function recordRestoredEditorMoveInLayoutOwner(
   before: EditorOwnerState,
   after: EditorOwnerState,
-  sourceWorktreeId: string,
+  source: Pick<OpenFile, 'id' | 'worktreeId'>,
   result: RestoredEditorOwnerResult
 ): void {
   const file = result.ok
     ? after.openFiles.find((candidate) => candidate.id === result.fileId)
     : undefined
   const targetWorktreeId = file?.worktreeId
-  if (!file || !targetWorktreeId || targetWorktreeId === sourceWorktreeId) {
+  const sourceWorktreeId = source.worktreeId
+  if (!file || !targetWorktreeId) {
+    return
+  }
+  if (targetWorktreeId === sourceWorktreeId) {
+    // A dependent preview makes an in-place re-own a collision, so the file is the only rename.
+    recordRenamedEditorFilesInLayoutOwner(after, before.openFiles, [
+      { oldFileId: source.id, newFileId: file.id }
+    ])
     return
   }
   const editorTabs = (state: EditorOwnerState, worktreeId: string): Tab[] =>
@@ -174,7 +197,7 @@ export function recordRestoredEditorMoveInLayoutOwner(
 export function recordRenamedEditorFilesInLayoutOwner(
   state: EditorOwnerState,
   filesBefore: readonly OpenFile[],
-  rekeys: readonly OpenFilePathRekey[]
+  rekeys: readonly Pick<OpenFilePathRekey, 'oldFileId' | 'newFileId'>[]
 ): void {
   const before = new Map(filesBefore.map((file) => [file.id, file]))
   const after = new Map(state.openFiles.map((file) => [file.id, file]))

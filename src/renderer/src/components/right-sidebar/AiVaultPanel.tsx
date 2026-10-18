@@ -33,7 +33,6 @@ import { useAiVaultPanelScope } from './use-ai-vault-panel-scope'
 import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-options'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
-import { currentAiVaultScanIssueResult } from './ai-vault-scan-issue-state'
 import { useAiVaultSessionDeleteAction } from './ai-vault-session-delete-action'
 import { useAiVaultPanelSearch } from './use-ai-vault-search'
 import { aiVaultSearchScopeIdentity } from './ai-vault-search-scope-identity'
@@ -41,7 +40,6 @@ import { AiVaultPanelSearch } from './AiVaultPanelSearch'
 import { useAiVaultPanelSessionResume } from './use-ai-vault-panel-session-resume'
 import { AiVaultScanProgressStrip } from './AiVaultScanProgressStrip'
 import { useAiVaultScanProgress } from './ai-vault-scan-progress-store'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { aiVaultLocalScanKey } from '../../../../shared/ai-vault-local-scan-key'
 import { useAiVaultPanelWorkspace } from './use-ai-vault-panel-workspace'
 import {
@@ -132,14 +130,16 @@ export default function AiVaultPanel({
   const scopePaths = useMemo(
     () =>
       deriveAiVaultScopeSessionPaths(activeWorktree ?? null, allWorktrees, {
+        scope,
         activeProjectKey,
         projectHostSetupProjection
       }),
-    [activeProjectKey, activeWorktree, allWorktrees, projectHostSetupProjection]
+    [activeProjectKey, activeWorktree, allWorktrees, projectHostSetupProjection, scope]
   )
   const {
     error,
     loading,
+    scopePending,
     refresh,
     scanResult,
     sessions: history,
@@ -165,11 +165,7 @@ export default function AiVaultPanel({
     limit: sessionLimit === 'unlimited' ? undefined : sessionLimit,
     unlimited: sessionLimit === 'unlimited'
   })
-  const scanProgress = useAiVaultScanProgress(
-    executionHostScope,
-    requestedScanKey,
-    scanResult?.scanId
-  )
+  const scanProgress = useAiVaultScanProgress(executionHostScope, requestedScanKey)
   const stripProgress = searching ? null : scanProgress
   // Deliberately blind to the active repo/worktree: rebuilding these session
   // maps on every worktree switch is what made switching visibly slow (#10841 era).
@@ -292,7 +288,7 @@ export default function AiVaultPanel({
         onRefresh={() => (searching ? search.retry() : void refresh({ force: true }))}
       />
 
-      {stripProgress ? <AiVaultScanProgressStrip progress={stripProgress} /> : null}
+      {stripProgress ? <AiVaultScanProgressStrip {...stripProgress} /> : null}
 
       {!searching && error ? (
         <div className="border-b border-sidebar-border px-3 py-2 text-xs text-destructive">
@@ -300,14 +296,7 @@ export default function AiVaultPanel({
         </div>
       ) : null}
 
-      {!searching && (
-        <AiVaultScanIssueBanners
-          scanResult={currentAiVaultScanIssueResult(
-            scanResult,
-            loading && executionHostScope === LOCAL_EXECUTION_HOST_ID
-          )}
-        />
-      )}
+      {!searching && <AiVaultScanIssueBanners scanResult={scanResult} />}
       <AiVaultPanelSearch search={search} noAgents={agents.length === 0}>
         {searching
           ? filteredSessions.length > 0 && (
@@ -333,6 +322,7 @@ export default function AiVaultPanel({
             groups={groups}
             collapsedGroups={collapsedGroups}
             loading={searching ? search.loading : loading}
+            scopePending={!searching && scopePending}
             scanProgressShown={stripProgress !== null}
             sessionsCount={sessions.length}
             filteredSessionsCount={filteredSessions.length}

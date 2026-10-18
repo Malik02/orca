@@ -254,6 +254,33 @@ describe('layout.apply', () => {
     ).toBe(true)
   })
 
+  it('takes a chat tab under the window’s id, with its place and creation time', async () => {
+    const apply = eraseRpcMethods(LAYOUT_APPLY_METHODS).find(
+      (method) => method.name === 'layout.apply'
+    )
+    const parse = (command: Record<string, unknown>) => apply?.params?.safeParse({ command })
+    const open = {
+      type: 'openAgentSessionTab',
+      workspace: WORKTREE,
+      tabId: 'structured-agent-session-chat-1',
+      sessionId: 'chat-1',
+      agent: 'codex',
+      groupId: 'g1',
+      afterTabId: 'tab-1',
+      createdAt: 5,
+      split: { besideGroupId: 'g0', direction: 'right' }
+    }
+
+    expect(parse(open)?.success).toBe(true)
+    expect(parse({ ...open, tabId: undefined })?.success).toBe(false)
+    expect(parse({ ...open, sessionId: '' })?.success).toBe(false)
+    expect(parse({ ...open, index: -1 })?.success).toBe(false)
+    // Only main's own restore and activation ask for a first surface.
+    expect(apply?.params?.parse({ command: { ...open, initial: 'restore' } })).toEqual({
+      command: open
+    })
+  })
+
   it('applies a browser tab’s record change to the workspace’s routed partition', async () => {
     const { runtime, applyLayoutCommand } = runtimeHolding('ssh:target-1')
     const page = {
@@ -290,6 +317,21 @@ describe('layout.apply', () => {
     expect(
       apply?.params?.parse({ command: { type: 'closeTabs', workspace: WORKTREE, tabIds: ['e1'] } })
     ).toEqual({ command: { type: 'closeTabs', workspace: WORKTREE, tabIds: ['e1'] } })
+  })
+
+  it('accepts a simulator tab open under the window’s id, into its group or a new split', async () => {
+    const apply = eraseRpcMethods(LAYOUT_APPLY_METHODS).find(
+      (method) => method.name === 'layout.apply'
+    )
+    const parse = (command: Record<string, unknown>) => apply?.params?.safeParse({ command })
+    const open = { type: 'openSimulatorTab', workspace: WORKTREE, tabId: 'sim-1', groupId: 'g1' }
+
+    expect(parse({ ...open, afterTabId: 'tab-1', createdAt: 5 })?.success).toBe(true)
+    expect(parse({ ...open, split: { besideGroupId: 'g0', direction: 'right' } })?.success).toBe(
+      true
+    )
+    expect(parse({ ...open, tabId: undefined })?.success).toBe(false)
+    expect(parse({ ...open, index: -1 })?.success).toBe(false)
   })
 
   it('accepts an editor tab move to the workspace the window resolved, naming its new ids', async () => {
@@ -424,6 +466,34 @@ describe('layout.apply', () => {
     expect(parse({ ...wake })?.success).toBe(false)
     expect(parse({ ...wake, paneKeys: [paneKey, paneKey] })?.success).toBe(false)
     expect(parse({ ...wake, paneKeys: [otherTabPane] })?.success).toBe(false)
+  })
+
+  it('accepts a record-only sleep and a record-only wake of any of one tab’s panes', () => {
+    const apply = eraseRpcMethods(LAYOUT_APPLY_METHODS).find(
+      (method) => method.name === 'layout.apply'
+    )
+    const parse = (command: Record<string, unknown>) => apply?.params?.safeParse({ command })
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    const secondPane = 'tab-1:33333333-3333-4333-8333-333333333333'
+    const otherTabPane = 'tab-2:22222222-2222-4222-8222-222222222222'
+    const record = {
+      paneKey,
+      worktreeId: WORKTREE,
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      prompt: '',
+      state: 'working',
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'live'
+    }
+    const sleep = { type: 'sleep', workspace: WORKTREE, tabId: 'tab-1', recordOnly: true }
+    const wake = { type: 'wake', workspace: WORKTREE, tabId: 'tab-1', recordOnly: true }
+
+    expect(parse({ ...sleep, paneKeys: [paneKey], records: [record] })?.success).toBe(true)
+    expect(parse({ ...wake, paneKeys: [paneKey, secondPane] })?.success).toBe(true)
+    expect(parse({ ...wake, paneKeys: [paneKey, otherTabPane] })?.success).toBe(false)
+    expect(parse({ ...wake, paneKeys: [] })?.success).toBe(false)
   })
 
   it('applies group sizes to the workspace’s routed partition', async () => {

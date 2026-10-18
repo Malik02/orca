@@ -1,4 +1,5 @@
 import { useNativeChatComposerNotice } from './use-native-chat-composer-notice'
+import { useNativeChatMobileHoldNotice } from './use-native-chat-mobile-hold-notice'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { forwardRef, useCallback, useState } from 'react'
 import { useNativeChatComposerInterrupt } from './use-native-chat-composer-interrupt'
@@ -18,8 +19,6 @@ import { useNativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import { useNativeChatSessionOptions } from './use-native-chat-session-options'
 import { useNativeChatDictation } from './use-native-chat-dictation'
 import { useNativeChatSessionOptionCommand } from './use-native-chat-session-option-command'
-import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
-import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import { useNativeChatPickerCommandDispatch } from './use-native-chat-picker-command-dispatch'
 import type {
   NativeChatComposerHandle,
@@ -30,7 +29,7 @@ import { useNativeChatStructuredComposerSend } from './use-native-chat-structure
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
-import { useNativeChatResumeCommand } from './use-native-chat-resume-command'
+import { useNativeChatComposerCommandPicker } from './use-native-chat-composer-command-picker'
 
 export type {
   NativeChatComposerHandle,
@@ -54,6 +53,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       targetPtyId,
       agent,
       canSend = true,
+      unavailableHint,
       isWorking = false,
       isStopping = false,
       afterStop,
@@ -96,7 +96,11 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setCaret
     })
     const [activeSuggestion, setActiveSuggestion] = useState(0)
-    const { notices, setNotice } = useNativeChatComposerNotice(chatNotices)
+    const holdNotice = useNativeChatMobileHoldNotice(
+      structuredTransport ? null : targetPtyId,
+      canSend
+    )
+    const { notices, setNotice } = useNativeChatComposerNotice(chatNotices, holdNotice)
     const { textareaRef } = useNativeChatComposerAppMenuSelection(imeEnterGesture.isComposing)
     const recall = useNativeChatComposerRecall({
       draft,
@@ -110,21 +114,22 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       { inputOwnedByCard, onPendingSendRetired: optimisticSendOutcome?.reject }
     )
 
-    const { agentCommands, sessionSkillNames } = useNativeChatComposerCatalog(
-      agent,
-      structuredTransport
-    )
-    const editor = { textareaRef, setDraft, setCaret, setActiveSuggestion }
-    const picker = useNativeChatPickerState({
+    // Why inputOwnedByCard: the hidden field can still hold keyboard focus for a frame.
+    const [hasPty, disabled] = structuredTransport
+      ? [true, !canSend || unavailableHint !== undefined]
+      : [targetPtyId !== null, targetPtyId === null || !canSend || inputOwnedByCard]
+
+    const { picker, resume } = useNativeChatComposerCommandPicker({
       agent,
       terminalTabId,
       draftScopeKey: paneKey,
       draft,
       caret,
-      agentCommands,
       recalledFromHistory: recall.active,
-      sessionSkillNames,
-      ...editor
+      disabled,
+      structuredTransport,
+      editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
+      setNotice
     })
     const {
       autocomplete,
@@ -135,14 +140,6 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       dismiss,
       handleDraftOrCaretChange
     } = picker
-    const resume = useNativeChatResumeCommand({
-      structuredTransport,
-      agent,
-      terminalTabId,
-      picker,
-      editor,
-      setNotice
-    })
     const mentionFiles = useNativeChatMentionFiles({
       query: autocomplete.mode === 'mention' ? autocomplete.query : null,
       terminalTabId,
@@ -157,15 +154,11 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       return { ptyId: targetPtyId }
     }, [targetPtyId])
 
-    // Why inputOwnedByCard: the hidden field can still hold keyboard focus for a frame.
-    const [hasPty, disabled] = structuredTransport
-      ? [true, !canSend]
-      : [targetPtyId !== null, targetPtyId === null || !canSend || inputOwnedByCard]
-
     const attachments = useNativeChatComposerAttachments({
       attachmentScopeKey: draftScopeKey,
       allowWithoutTarget: Boolean(structuredTransport),
       acceptsImages: structuredTransport?.acceptsImages !== false,
+      imageReferences: Boolean(structuredTransport),
       caret,
       disabled,
       isComposing: imeEnterGesture.isComposing,
@@ -188,19 +181,20 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       ? !hasPty || !onStop
       : sendHeld || (draft.trim() === '' && imageAttachments.length === 0)
 
-    const { pickAttachments, resolveAttachmentOwner } = useNativeChatFileDrops({
-      paneKey,
-      draftScopeKey,
-      targetPtyId,
-      structuredTransport,
-      terminalTabId,
-      structuredWorktreeId: structuredTransport?.worktreeId,
-      structuredSession: structuredTransport,
-      disabled,
-      attachResolvedPaths,
-      pendingChips: attachments.pendingChips,
-      setNotice
-    })
+    const { pickAttachments, attachExternalPaths, captureCopiedFiles, resolveAttachmentOwner } =
+      useNativeChatFileDrops({
+        paneKey,
+        draftScopeKey,
+        targetPtyId,
+        structuredTransport,
+        terminalTabId,
+        structuredWorktreeId: structuredTransport?.worktreeId,
+        structuredSession: structuredTransport,
+        disabled,
+        attachResolvedPaths,
+        pendingChips: attachments.pendingChips,
+        setNotice
+      })
 
     const handlePasteEvent = useNativeChatComposerHandle(ref, {
       attachmentScopeKey: draftScopeKey,
@@ -221,6 +215,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       disabled,
       resolveAttachmentOwner,
       attachResolvedPaths,
+      attachCopiedFiles: attachExternalPaths,
+      captureCopiedFiles,
       beginPendingImageAttachment: attachments.beginPendingImageAttachment,
       // Settles into the scope cache, which outlives a composer a prompt card unmounted.
       resolvePendingImageAttachment: attachments.pendingChips.resolve,
@@ -229,7 +225,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setNotice
     })
 
-    const dictation = useNativeChatDictation(textareaRef)
+    const dictation = useNativeChatDictation(textareaRef, disabled)
     const { dispatch: dispatchSessionOptionCommand, isDispatching: isDispatchingSessionOption } =
       useNativeChatSessionOptionCommand({
         agent,
@@ -366,11 +362,13 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         disabled={disabled}
         hasPty={hasPty}
         canSend={canSend}
+        unavailableHint={unavailableHint}
         autocomplete={autocomplete}
         mentionFiles={mentionFiles}
         activeSuggestion={activeSuggestion}
         notices={notices}
         imageAttachments={imageAttachments}
+        numberImages={Boolean(structuredTransport)}
         attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
         sendButtonDisabled={sendButtonDisabled}
         sendBlockedReason={sendBlockedReason}

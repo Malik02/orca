@@ -1,5 +1,4 @@
-import type { NativeChatGlobalSettings } from './native-chat-appearance-settings'
-import type { WorktreeDeletionPreferences as DeletePrefs } from './worktree-deletion-preferences'
+import type { GlobalSettingsBase } from './global-settings-base'
 import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/project-types'
@@ -48,8 +47,6 @@ export type { WorktreeVisibilityDefaults } from './repo-types'
 
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
-
-type GlobalSettingsBase = NativeChatGlobalSettings & DeletePrefs
 
 export type GlobalSettings = GlobalSettingsBase & {
   workspaceDir: string

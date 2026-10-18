@@ -3,6 +3,7 @@ import type { EditorSlice } from '../types/editor-slice'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import type { Tab } from '../../../../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { withPreviewEnded } from '../../tabs/tab-preview-flag'
 import {
   previewEditorTabsOf,
   recordPromotedEditorTabsInLayoutOwner
@@ -97,7 +98,7 @@ export function createOpenFileMutations(
                     worktreeId,
                     tabs.map((tab) =>
                       tab.entityId === fileId && isEditorTabContentType(tab.contentType)
-                        ? { ...tab, isPreview: false }
+                        ? withPreviewEnded(tab)
                         : tab
                     )
                   ])
