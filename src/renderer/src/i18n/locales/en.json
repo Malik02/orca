@@ -3767,7 +3767,6 @@
             "chatUnavailableAfterSelection": "Couldn't start a {{value0}} chat.",
             "startChat": "Start a {{value0}} chat",
             "cliTag": "(CLI)",
-            "otherWays": "Other ways to open {{value0}}",
             "agentsLoading": "Loading agents"
           },
           "RecentTabSwitcher": {

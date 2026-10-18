@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredLaunchState } from '@/lib/structured-agent-session-launch-registry'
@@ -36,7 +36,11 @@ vi.mock('@/lib/agent-catalog', () => ({
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuSub: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuSubContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuSubTrigger: () => <button aria-label="Other ways to open Codex" />,
+  DropdownMenuSubTrigger: ({ children, title, onClick }: ComponentProps<'button'>) => (
+    <button title={title} onClick={onClick}>
+      {children}
+    </button>
+  ),
   DropdownMenuItem: ({
     children,
     disabled,
@@ -251,7 +255,7 @@ describe('QuickLaunchAgentMenuItems launches', () => {
   })
 
   // Why: the notes menu holds what it sent until this result, so a second send leaves them out.
-  it('opens the CLI once with notes, then the normal row opens chat', async () => {
+  it('opens the CLI once with notes, then a click on the row starts a chat and closes the menu', async () => {
     const model = vi.spyOn(menuRows, 'useNewTabAgentMenuRows').mockReturnValueOnce({
       state: 'settled',
       rows: [{ kind: 'chat', agent: 'codex', executionHostId: 'runtime:server' }],
@@ -271,6 +275,7 @@ describe('QuickLaunchAgentMenuItems launches', () => {
       promptDeliveryResult: delivery
     })
     const onPromptHandedOff = vi.fn()
+    const closeMenu = vi.fn()
 
     render(
       <QuickLaunchAgentMenuItems
@@ -280,6 +285,7 @@ describe('QuickLaunchAgentMenuItems launches', () => {
         prompt="review notes"
         promptDelivery="submit-after-ready"
         onPromptHandedOff={onPromptHandedOff}
+        closeMenu={closeMenu}
       />
     )
     model.mockRestore()
@@ -302,6 +308,7 @@ describe('QuickLaunchAgentMenuItems launches', () => {
       requestedSurface: 'chat',
       selectedExecutionHostId: 'runtime:server'
     })
+    expect(closeMenu).toHaveBeenCalledOnce()
   })
 
   // The notes keep their text, so they are the one place that says it did not go.

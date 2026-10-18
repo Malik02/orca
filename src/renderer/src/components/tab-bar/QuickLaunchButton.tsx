@@ -49,6 +49,8 @@ export type QuickLaunchAgentMenuItemsProps = {
   onPromptHandedOff?: (delivered: Promise<unknown>) => void
   /** Nothing to send: e.g. every note is already on its way, so no agent is started. */
   disabled?: boolean
+  /** Closes the host menu; a chat row is a submenu trigger, which Radix never closes on select. */
+  closeMenu?: () => void
 }
 
 const PLACEHOLDER_WIDTHS = ['w-3/5', 'w-1/2', 'w-2/3', 'w-2/5', 'w-3/4', 'w-1/3', 'w-4/5', 'w-1/4']
@@ -158,10 +160,10 @@ function QuickLaunchAgentMenuItemsInner(props: QuickLaunchAgentMenuItemsProps): 
 
 export function ProjectedAgentMenuItems({
   disabled = false,
+  closeMenu,
   model,
   runLaunch
-}: {
-  disabled?: boolean
+}: Pick<QuickLaunchAgentMenuItemsProps, 'disabled' | 'closeMenu'> & {
   model: NewTabAgentMenuModel
   runLaunch: (row: NewTabAgentMenuRow) => void
 }): React.JSX.Element {
@@ -246,62 +248,107 @@ export function ProjectedAgentMenuItems({
         }
         const showsDefaultAgentShortcut =
           newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
-        const item = (
-          <DropdownMenuItem
-            variant="launch"
-            disabled={disabled}
-            onSelect={() => runLaunch(row)}
-            title={rowTitle(row, label)}
-            className="flex-1"
-          >
+        const rowContent = (
+          <>
             <AgentIcon agent={agent} size={14} />
             <span className="flex-1">{rowLabel(row)}</span>
             {showsDefaultAgentShortcut ? (
               <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
             ) : null}
-          </DropdownMenuItem>
+          </>
         )
         return (
           <React.Fragment key={rowId(row)}>
             {startsCliGroup ? <DropdownMenuSeparator /> : null}
             {row.kind === 'chat' && detectedIds?.includes(agent) ? (
-              <div className="flex items-center">
-                {item}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger
-                    disabled={disabled}
-                    aria-label={translate(
-                      'auto.components.tab.bar.QuickLaunchButton.otherWays',
-                      'Other ways to open {{value0}}',
-                      { value0: label }
-                    )}
-                  />
-                  <DropdownMenuSubContent>
-                    <DropdownMenuItem
-                      variant="launch"
-                      disabled={disabled}
-                      onSelect={() => runLaunch({ ...row, kind: 'cli' })}
-                      title={rowTitle({ ...row, kind: 'cli' }, label)}
-                    >
-                      <AgentIcon agent={agent} size={14} />
-                      <span>
-                        {label}
-                        <span className="ml-1 font-normal text-muted-foreground">
-                          {translate('auto.components.tab.bar.QuickLaunchButton.cliTag', '(CLI)')}
-                        </span>
-                      </span>
-                    </DropdownMenuItem>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              </div>
+              <ChatRowWithCliSubmenu
+                row={row}
+                label={label}
+                disabled={disabled}
+                runLaunch={runLaunch}
+                closeMenu={closeMenu}
+              >
+                {rowContent}
+              </ChatRowWithCliSubmenu>
             ) : (
-              item
+              <DropdownMenuItem
+                variant="launch"
+                disabled={disabled}
+                onSelect={() => runLaunch(row)}
+                title={rowTitle(row, label)}
+              >
+                {rowContent}
+              </DropdownMenuItem>
             )}
           </React.Fragment>
         )
       })}
       <AgentSettingsMenuItem onSelect={openAgentSettings} />
     </>
+  )
+}
+
+// Why: the whole chat row opens the CLI submenu on hover or ArrowRight; a click or
+// Enter/Space still starts the chat, as a plain item's onSelect would.
+function ChatRowWithCliSubmenu({
+  row,
+  label,
+  disabled,
+  runLaunch,
+  closeMenu,
+  children
+}: {
+  row: Extract<NewTabAgentMenuRow, { kind: 'chat' }>
+  label: string
+  disabled: boolean
+  runLaunch: (row: NewTabAgentMenuRow) => void
+  closeMenu?: () => void
+  children: React.ReactNode
+}): React.JSX.Element {
+  const cliRow: NewTabAgentMenuRow = { ...row, kind: 'cli' }
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger
+        variant="launch"
+        disabled={disabled}
+        title={rowTitle(row, label)}
+        onClick={(event) => {
+          // Prevented so Radix does not open the submenu on the click that starts the chat.
+          event.preventDefault()
+          if (!disabled) {
+            runLaunch(row)
+            closeMenu?.()
+          }
+        }}
+        onKeyDown={(event) => {
+          if (
+            (event.key === 'Enter' || event.key === ' ') &&
+            event.target === event.currentTarget
+          ) {
+            event.preventDefault()
+            event.currentTarget.click()
+          }
+        }}
+      >
+        {children}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        <DropdownMenuItem
+          variant="launch"
+          disabled={disabled}
+          onSelect={() => runLaunch(cliRow)}
+          title={rowTitle(cliRow, label)}
+        >
+          <AgentIcon agent={row.agent} size={14} />
+          <span>
+            {label}
+            <span className="ml-1 font-normal text-muted-foreground">
+              {translate('auto.components.tab.bar.QuickLaunchButton.cliTag', '(CLI)')}
+            </span>
+          </span>
+        </DropdownMenuItem>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   )
 }
 

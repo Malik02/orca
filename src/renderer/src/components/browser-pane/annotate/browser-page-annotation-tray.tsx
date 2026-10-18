@@ -168,6 +168,7 @@ export function BrowserPageAnnotationTray({
                 prompt={browserAnnotationsPrompt}
                 onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                 onPromptHandedOff={handleBrowserAnnotationsHandedOff}
+                closeMenu={() => handleAnnotationTraySendOpenChange(false)}
               />
             </DropdownMenuContent>
           </DropdownMenu>
