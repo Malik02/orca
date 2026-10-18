@@ -27,11 +27,8 @@ function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknow
 /** Keeps editor filesystem subscriptions alive beyond any individual editor surface. */
 export function useEditorExternalWatch(): void {
   const snapshot = useAppStore(selectEditorExternalWatchTargets)
-  const { targetsKey, unwatchedTargetsKey } = snapshot
   const targetsRef = useRef<EditorExternalWatchTarget[]>([])
   const unwatchedTargetKeysRef = useRef<ReadonlySet<string>>(new Set())
-  const latestSnapshotRef = useRef(snapshot)
-  latestSnapshotRef.current = snapshot
   const remoteWatchUnsubsRef = useRef(new Map<string, () => void>())
   const fsChangedHandlerRef = useRef<
     ((payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void) | null
@@ -39,9 +36,9 @@ export function useEditorExternalWatch(): void {
 
   // Why: diff targets so unchanged worktrees keep their subscription; full teardown on every store change drops events in the gap.
   useEffect(() => {
-    const nextTargets = latestSnapshotRef.current.targets
+    const nextTargets = snapshot.targets
     const previousUnwatchedKeys = unwatchedTargetKeysRef.current
-    unwatchedTargetKeysRef.current = latestSnapshotRef.current.unwatchedTargetKeys
+    unwatchedTargetKeysRef.current = snapshot.unwatchedTargetKeys
     const previousTargets = targetsRef.current
     const previousKeys = new Set(previousTargets.map(getEditorExternalWatchTargetKey))
     const nextKeys = new Set(nextTargets.map(getEditorExternalWatchTargetKey))
@@ -94,7 +91,8 @@ export function useEditorExternalWatch(): void {
     }
     targetsRef.current = nextTargets
     // Why: final unmount cleanup owns teardown so target changes remain differential.
-  }, [targetsKey, unwatchedTargetsKey])
+    // Why: the selector keeps the snapshot identity until a target or unwatched key changes.
+  }, [snapshot])
 
   // Why: one stable fs:changed listener prevents target-key changes from opening an event-loss gap.
   useEffect(() => {
