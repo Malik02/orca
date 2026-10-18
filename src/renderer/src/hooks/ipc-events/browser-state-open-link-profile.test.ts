@@ -30,20 +30,20 @@ function captureOpenLinkHandler(): (event: {
   let handler:
     | ((event: { browserPageId: string; url: string; activate?: boolean }) => void)
     | null = null
-  const browserApi = new Proxy(
-    {
-      onOpenLinkInOrcaTab: (
-        callback: (event: { browserPageId: string; url: string; activate?: boolean }) => void
-      ) => {
-        handler = callback
-        return noopUnsubscribe
-      }
-    } as Record<string, unknown>,
-    {
-      get: (target, property) =>
-        property in target ? target[property as string] : () => noopUnsubscribe
+  const browserTarget: Record<string, unknown> = {
+    // Why: the focus guard watches the DOM, which this node test has none of.
+    onAgentInputFocusGuard: undefined,
+    onOpenLinkInOrcaTab: (
+      callback: (event: { browserPageId: string; url: string; activate?: boolean }) => void
+    ) => {
+      handler = callback
+      return noopUnsubscribe
     }
-  )
+  }
+  const browserApi = new Proxy(browserTarget, {
+    get: (target, property) =>
+      property in target ? target[property as string] : () => noopUnsubscribe
+  })
   const api = new Proxy({ browser: browserApi } as Record<string, unknown>, {
     get: (target, property) =>
       property in target
