@@ -18,6 +18,10 @@ import {
   SELF_WRITE_REMOTE_TTL_MS
 } from './editor-self-write-registry'
 import { getDiskBaselineSignature } from './diff-content-signature'
+import {
+  CHANGED_ON_DISK_SAVE_REFUSAL,
+  verifyDiskBaselineBeforeUserSave
+} from './editor-save-baseline-check'
 import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 
@@ -95,6 +99,13 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
 
         // Why: only autosave is blocked while suspended; explicit user saves proceed (the banner warned).
         if (trigger === 'autosave' && isAutosaveSuspendedForFile(liveFile)) {
+          return
+        }
+        // Why: an unverified baseline means disk may have moved; check before writing, and refuse until the banner shows.
+        if (trigger === 'user' && !(await verifyDiskBaselineBeforeUserSave(store, liveFile))) {
+          throw new Error(CHANGED_ON_DISK_SAVE_REFUSAL)
+        }
+        if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {
           return
         }
 

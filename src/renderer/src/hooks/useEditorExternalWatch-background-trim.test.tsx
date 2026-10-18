@@ -14,6 +14,7 @@ type TestWatchTarget = {
 const harness = vi.hoisted(() => {
   const targets: TestWatchTarget[] = []
   const unwatched: TestWatchTarget[] = []
+  const runtimeReady: { current: (() => void) | undefined } = { current: undefined }
   return {
     keyOf: (target: TestWatchTarget): string =>
       `${target.worktreeId}::${target.runtimeEnvironmentId ?? 'client'}`,
@@ -21,7 +22,8 @@ const harness = vi.hoisted(() => {
     unwatched,
     arm: vi.fn(),
     reload: vi.fn(),
-    runtimeUnsubscribe: vi.fn()
+    runtimeUnsubscribe: vi.fn(),
+    runtimeReady
   }
 })
 
@@ -38,7 +40,15 @@ vi.mock('./editor-external-watch-targets', () => ({
   getEditorExternalWatchTargetKey: harness.keyOf
 }))
 vi.mock('./editor-runtime-file-watch', () => ({
-  subscribeEditorRuntimeFileWatch: () => harness.runtimeUnsubscribe
+  subscribeEditorRuntimeFileWatch: (
+    _target: unknown,
+    _onPayload: unknown,
+    _onError: unknown,
+    onFirstReady?: () => void
+  ) => {
+    harness.runtimeReady.current = onFirstReady
+    return harness.runtimeUnsubscribe
+  }
 }))
 vi.mock('./editor-external-watch-event-reconciliation', () => ({
   buildEditorExternalWatchEventHandler: () => ({ handleFsChanged: vi.fn(), dispose: vi.fn() })
@@ -131,12 +141,41 @@ describe('useEditorExternalWatch with background trim', () => {
     expect(harness.reload).toHaveBeenCalledTimes(1)
   })
 
-  it('reloads a dropped runtime workspace right after resubscribing', async () => {
+  it('reloads a dropped runtime workspace only once its host reports the watch ready', async () => {
     await render([active], [runtimeBackground])
     await render([active, runtimeBackground], [])
 
     expect(harness.arm).toHaveBeenCalledWith(runtimeBackground)
+    expect(harness.reload).not.toHaveBeenCalled()
+    await act(async () => harness.runtimeReady.current?.())
     expect(harness.reload).toHaveBeenCalledWith(runtimeBackground)
+  })
+
+  it('keeps a directory watched while another workspace on it still needs it', async () => {
+    const sibling = { ...background, worktreeId: 'sibling' }
+    await render([active, background, sibling], [])
+    expect(watchWorktree).toHaveBeenCalledTimes(2)
+
+    await render([active, sibling], [background])
+    expect(unwatchWorktree).not.toHaveBeenCalled()
+
+    await render([active], [background, sibling])
+    expect(unwatchWorktree).toHaveBeenCalledTimes(1)
+    expect(unwatchWorktree).toHaveBeenCalledWith({
+      worktreePath: '/background',
+      connectionId: undefined
+    })
+  })
+
+  it('catches up a re-watched workspace whose directory another workspace already watches', async () => {
+    const sibling = { ...background, worktreeId: 'sibling' }
+    await render([active, sibling], [background])
+    await render([active, sibling, background], [])
+
+    expect(watchWorktree).toHaveBeenCalledTimes(2)
+    expect(harness.reload).not.toHaveBeenCalled()
+    await act(async () => resolveWatch())
+    expect(harness.reload).toHaveBeenCalledWith(background)
   })
 
   it('does not reload a workspace whose tabs were just opened', async () => {

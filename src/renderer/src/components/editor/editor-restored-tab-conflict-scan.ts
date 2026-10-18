@@ -53,6 +53,22 @@ export async function probeEditorTabFileMissing(state: AppState, file: OpenFile)
   }
 }
 
+/** Reads the tab's file from its owning host, the same read the conflict scan verifies with. */
+export function readEditorTabDiskContent(
+  state: AppState,
+  file: OpenFile
+): ReturnType<typeof readRuntimeFileContent> {
+  return readRuntimeFileContent({
+    target: requireRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId),
+    filePath: file.filePath,
+    relativePath: file.relativePath,
+    worktreeId: file.worktreeId,
+    connectionId: getFileConnectionId(file),
+    expectedExternalSshTargetId: file.externalSshTargetId,
+    access: editorTabFileAccess(state, file)
+  })
+}
+
 export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
   // Dedupes queued + in-flight verifications; the store's pending flag is the durable "needs verification" signal.
   const inFlightFileIds = new Set<string>()
@@ -67,16 +83,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
     // ids are file paths: a stray leftover marker would skip a reopened same-path tab, so only a scheduled retry keeps it set.
     let retryScheduled = false
     try {
-      const state = store.getState()
-      const result = await readRuntimeFileContent({
-        target: requireRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId),
-        filePath: file.filePath,
-        relativePath: file.relativePath,
-        worktreeId: file.worktreeId,
-        connectionId: getFileConnectionId(file),
-        expectedExternalSshTargetId: file.externalSshTargetId,
-        access: editorTabFileAccess(state, file)
-      })
+      const result = await readEditorTabDiskContent(store.getState(), file)
       if (disposed) {
         return
       }

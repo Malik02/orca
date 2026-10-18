@@ -55,11 +55,16 @@ function stampCleanTabDiskBaseline(id: string, result: FileContent): void {
   if (result.isBinary || result.loadError || result.csvPreview) {
     return
   }
+  stampCleanTabDiskContent(id, result.content)
+}
+
+/** Re-baselines a clean tab on content just read from disk. */
+export function stampCleanTabDiskContent(id: string, content: string): void {
   try {
     const state = useAppStore.getState()
     const loadedFile = state.openFiles.find((file) => file.id === id)
     if (loadedFile && !loadedFile.isDirty) {
-      state.setLastKnownDiskSignature(id, getDiskBaselineSignature(result.content))
+      state.setLastKnownDiskSignature(id, getDiskBaselineSignature(content))
       // Why: a fresh clean baseline is the disk verification a re-watched clean tab was waiting for.
       state.clearPendingDiskBaselineVerification(id)
     }

@@ -20,7 +20,8 @@ const harness = vi.hoisted(() => {
     targets,
     unwatched,
     holder,
-    readRuntimeFileContent: vi.fn()
+    readRuntimeFileContent: vi.fn(),
+    writeRuntimeFile: vi.fn()
   }
 })
 
@@ -52,6 +53,12 @@ vi.mock('@/runtime/runtime-file-read-client', () => ({
   readRuntimeFileContent: harness.readRuntimeFileContent
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/runtime/runtime-file-mutation-client', () => ({
+  writeRuntimeFile: harness.writeRuntimeFile
+}))
+vi.mock('@/lib/editor-file-operation-owner', () => ({
+  getEditorFileOperationContext: () => ({ connectionId: undefined })
+}))
 
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { useEditorExternalWatch } from './useEditorExternalWatch'
@@ -61,6 +68,10 @@ import {
   isAutosaveSuspendedForFile,
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT
 } from '@/components/editor/editor-autosave'
+import { createEditorSaveQueue } from '@/components/editor/editor-save-queue'
+import { CHANGED_ON_DISK_SAVE_REFUSAL } from '@/components/editor/editor-save-baseline-check'
+import { stampCleanTabDiskContent } from '@/components/editor/useEditorPanelFileContentLoader'
+import { createEditorExternalChangeTabReset } from '@/components/editor/editor-external-change-tab-reset'
 
 function WatchProbe(): null {
   useEditorExternalWatch()
@@ -193,5 +204,64 @@ describe('typing in a re-watched workspace before its reload lands', () => {
 
     expect(reloadEvents).toEqual(['a.ts'])
     expect(harness.readRuntimeFileContent).not.toHaveBeenCalled()
+  })
+
+  it('refuses an explicit save until the changed-on-disk banner is showing', async () => {
+    const read = deferred<{ content: string; isBinary: boolean }>()
+    harness.readRuntimeFileContent.mockReturnValue(read.promise)
+    await switchBackAndType()
+
+    const saveQueue = createEditorSaveQueue(store)
+    const firstSave = saveQueue.queueSave(file(), 'typed while the watch installs').then(
+      () => 'saved',
+      (error: unknown) => (error instanceof Error ? error.message : String(error))
+    )
+    // Why: let the save reach its disk check before the conflict scan's read lands.
+    await act(async () => {})
+    await act(async () => read.resolve({ content: 'v2 written by an agent', isBinary: false }))
+    expect(await firstSave).toBe(CHANGED_ON_DISK_SAVE_REFUSAL)
+    expect(harness.writeRuntimeFile).not.toHaveBeenCalled()
+    expect(file().externalMutation).toBe('changed')
+
+    // Why: with the banner up, a second save is a deliberate overwrite.
+    await saveQueue.queueSave(file(), 'typed while the watch installs')
+    expect(harness.writeRuntimeFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('arms an editable unstaged diff tab once its load stamped a baseline', async () => {
+    store.getState().closeFile(FILE)
+    store.getState().openFile({
+      filePath: FILE,
+      relativePath: 'a.ts',
+      worktreeId: 'background',
+      language: 'typescript',
+      mode: 'diff',
+      diffSource: 'unstaged'
+    })
+    stampCleanTabDiskContent(FILE, 'v1')
+    await render([active], [background])
+    await render([active, background], [])
+
+    expect(file().pendingDiskBaselineVerification).toBe(true)
+  })
+
+  it('drops a clean tab’s leftover draft when the catch-up reload lands', async () => {
+    const handleReset = createEditorExternalChangeTabReset({
+      store,
+      clearAutoSaveTimer: vi.fn(),
+      bumpSaveGeneration: vi.fn()
+    })
+    window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handleReset)
+    try {
+      // Why: edit then undo leaves a draft on a clean tab.
+      store.getState().setEditorDraft(FILE, 'v1')
+      await render([active], [background])
+      await render([active, background], [])
+      await act(async () => resolveWatch())
+
+      expect(store.getState().editorDrafts[FILE]).toBeUndefined()
+    } finally {
+      window.removeEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handleReset)
+    }
   })
 })

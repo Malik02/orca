@@ -12,6 +12,7 @@ import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
 import type { DiffContent, InFlightContentRead } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
+import { stampCleanTabDiskContent } from './useEditorPanelFileContentLoader'
 
 const inFlightDiffReads = new Map<string, InFlightContentRead<DiffContent>>()
 
@@ -160,6 +161,15 @@ export function useEditorPanelDiffContentLoader({
           return
         }
         setDiffContents((prev) => ({ ...prev, [file.id]: result }))
+        // Why: an editable unstaged diff writes its modified side, so it needs the same disk baseline as an edit tab.
+        if (
+          file.mode === 'diff' &&
+          file.diffSource === 'unstaged' &&
+          result.kind === 'text' &&
+          !result.largeDiffRenderLimit
+        ) {
+          stampCleanTabDiskContent(file.id, result.modifiedContent)
+        }
       } catch (err) {
         if (diffReadGenerationRef.current[file.id] !== generation) {
           return
