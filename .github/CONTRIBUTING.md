@@ -42,15 +42,17 @@ under `~/pnpm/store` that every worktree links to, instead of a full `node_modul
 An existing worktree converts on its next `pnpm install`, and an older branch without the setting
 converts back the same way. CI always uses the normal layout. Windows does too unless you set
 `ORCA_PNPM_GLOBAL_VIRTUAL_STORE=1`, because its store links are real symlinks, which may need
-administrator rights or Developer Mode. Two things to know:
+administrator rights or Developer Mode. Things to know:
 
 - Keep `~/node_modules` (and any other `node_modules` above the store) out of your home
   directory. Node resolves upward from the store slot, so a stray one there supplies
   dependencies the package never declared and hides missing-dependency bugs.
 - Native addons are never rebuilt in place in a shared slot: each CPU gets its own build
   beside it (see [`native-build-entry.cjs`](../config/scripts/native-build-entry.cjs)), so
-  cross-arch packaging is safe for other worktrees. To opt out for one install, run
-  `pnpm_config_enable_global_virtual_store=false pnpm install`.
+  cross-arch packaging is safe for other worktrees.
+- Either switch must stay set in your shell (`ORCA_PNPM_GLOBAL_VIRTUAL_STORE=1` on Windows,
+  `pnpm_config_enable_global_virtual_store=false` to opt out elsewhere): `pnpm run` re-checks
+  the install and relinks a worktree whose layout no longer matches.
 
 Ordinary installs include native optional dependencies for the current OS and CPU only.
 Before a cross-architecture build (including `pnpm build:mac`, which produces both x64 and
