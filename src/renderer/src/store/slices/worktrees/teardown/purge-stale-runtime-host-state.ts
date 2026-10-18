@@ -1,4 +1,5 @@
 import type { WorktreePurgeTarget, WorktreeSlice } from '../../worktree-helpers'
+import type { AppState } from '../../../types'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -18,6 +19,10 @@ import {
 import { buildFullWorktreePurgeState } from './worktree-purge-state'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
+import {
+  withoutSleptChatsForHosts,
+  withoutSleptChatsForWorkspaces
+} from '../../../../../../shared/workspace-chat-sleep'
 
 export function createPurgeStaleRuntimeHostState(
   set: WorktreeSliceSet,
@@ -212,8 +217,18 @@ export function createPurgeStaleRuntimeHostState(
             return targets.length > 0 ? targets : [{ id: worktreeId }]
           })
           // Why full: survivor ids were dropped above unless the session partition proves the bare-id state is the removed host's.
-          const purgeState =
+          const purgeState: Partial<AppState> =
             purgeTargets.length > 0 ? buildFullWorktreePurgeState(s, purgeTargets) : {}
+          const nextSleptChats = withoutSleptChatsForHosts(
+            withoutSleptChatsForWorkspaces(
+              purgeState.explicitlySleptChatsByWorkspace ?? s.explicitlySleptChatsByWorkspace,
+              removedWorktreeTargets
+            ),
+            new Set([...removed].map(toRuntimeExecutionHostId))
+          )
+          if (nextSleptChats !== s.explicitlySleptChatsByWorkspace) {
+            purgeState.explicitlySleptChatsByWorkspace = nextSleptChats
+          }
           const visitPurgeTargets = [
             ...removedWorktreeTargets,
             ...purgeTargets.filter(
@@ -258,6 +273,7 @@ export function createPurgeStaleRuntimeHostState(
             !visibilityDefaultsChanged &&
             !visibilitySupportChanged &&
             !visibilitySourceSupportChanged &&
+            nextSleptChats === s.explicitlySleptChatsByWorkspace &&
             removedWorktreeIds.size === 0
           ) {
             return s

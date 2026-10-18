@@ -16,6 +16,7 @@ type MockState = {
   tabsByWorktree: Record<string, TerminalTab[]>
   browserTabsByWorktree: Record<string, { id: string }[]>
   unifiedTabsByWorktree: Record<string, Tab[]>
+  explicitlySleptChatsByWorkspace: Record<string, { tabId: string; sessionId: string }[]>
   ptyIdsByTabId: Record<string, string[]>
   agentStatusEpoch: number
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
@@ -96,6 +97,7 @@ describe('useIsSleepingWorktree', () => {
       tabsByWorktree: {},
       browserTabsByWorktree: {},
       unifiedTabsByWorktree: {},
+      explicitlySleptChatsByWorkspace: {},
       ptyIdsByTabId: {},
       agentStatusEpoch: 0,
       agentStatusByPaneKey: {},
@@ -156,6 +158,37 @@ describe('useIsSleepingWorktree', () => {
       }
     }
 
+    expect(renderToStaticMarkup(<SleepProbe worktreeId={worktreeId} />)).toBe('<span>false</span>')
+  })
+
+  it('reads a slept chat as asleep until its agent runs again', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    const paneKey = makePaneKey('chat-1', LEAF_ID)
+    const chat = makeUnifiedTab({
+      id: 'chat-1',
+      worktreeId,
+      contentType: 'agent-session',
+      agentSessionAgent: 'claude'
+    })
+    chat.executionHostId = 'local'
+    const doneRow = makeAgentStatusEntry({ paneKey, state: 'done', worktreeId })
+    mockState = {
+      ...mockState,
+      unifiedTabsByWorktree: { [worktreeId]: [chat] },
+      explicitlySleptChatsByWorkspace: {
+        [`local|${worktreeId}`]: [{ tabId: chat.id, sessionId: chat.entityId }]
+      },
+      agentStatusByPaneKey: { [paneKey]: doneRow }
+    }
+    expect(renderToStaticMarkup(<SleepProbe worktreeId={worktreeId} />)).toBe('<span>true</span>')
+
+    // A send from another client starts the agent; its turn ends but the process lives on.
+    mockState = {
+      ...mockState,
+      agentStatusByPaneKey: {
+        [paneKey]: { ...doneRow, tabId: 'chat-1', structuredHostOwned: true }
+      }
+    }
     expect(renderToStaticMarkup(<SleepProbe worktreeId={worktreeId} />)).toBe('<span>false</span>')
   })
 

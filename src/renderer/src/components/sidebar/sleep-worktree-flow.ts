@@ -8,8 +8,10 @@ import {
 } from '@/lib/worktree-sleep-intent'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { Tab } from '../../../../shared/tab-types'
 import { preserveSidebarWorktreePosition } from './sleep-worktree-sidebar-position'
-import { stopWorkspaceChats } from './sleep-workspace-chat-stop'
+import { stopWorkspaceChats, type WorkspaceChatStopReceipt } from './sleep-workspace-chat-stop'
+import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 
 /** One per host asked to stop the workspace's chats. */
 export type WorkspaceSleepResult = {
@@ -79,7 +81,9 @@ function describeChatStopFailure(): string {
 export async function runSleepWorktrees(
   worktreeIds: readonly string[]
 ): Promise<WorkspaceSleepResult[]> {
-  const { errors, results } = await sleepWorktreesReportingFailures(worktreeIds)
+  const { errors, results } = await sleepWorktreesReportingFailures(worktreeIds, {
+    recordExplicitChatSleep: true
+  })
   if (errors.length > 0) {
     // Why: callers are fire-and-forget; surface actionable teardown failures after restoring retryable UI state.
     toast.error(
@@ -100,6 +104,31 @@ export async function runSleepWorktrees(
   return results
 }
 
+/** Records the chats each host confirmed stopped; a failed chat stop leaves the workspace awake. */
+function recordExplicitChatSleep(
+  worktreeId: string,
+  receipts: readonly WorkspaceChatStopReceipt[] | null,
+  capturedChats: readonly Tab[]
+): void {
+  const store = useAppStore.getState()
+  if (!receipts) {
+    store.clearWorkspaceChatsSlept(worktreeId)
+    return
+  }
+  // Why by session id: a copy reached through a paired runtime stamps its tabs with its own host.
+  const stopped = new Set(receipts.flatMap((receipt) => receipt.stoppedSessionIds))
+  const chatsByHost = new Map<ExecutionHostId, { tabId: string; sessionId: string }[]>()
+  for (const tab of capturedChats) {
+    if (tab.executionHostId && stopped.has(tab.entityId)) {
+      const chats = chatsByHost.get(tab.executionHostId) ?? []
+      chatsByHost.set(tab.executionHostId, [...chats, { tabId: tab.id, sessionId: tab.entityId }])
+    }
+  }
+  for (const [hostId, chats] of chatsByHost) {
+    store.markWorkspaceChatsSlept(worktreeId, hostId, chats)
+  }
+}
+
 export type WorktreeSleepOutcome = {
   /** Every workspace not verifiably slept, including one whose chat stop went unconfirmed. */
   failedWorktreeIds: string[]
@@ -109,7 +138,9 @@ export type WorktreeSleepOutcome = {
 
 /** The sleep without the toast, for callers that report failures themselves. */
 export async function sleepWorktreesReportingFailures(
-  requestedWorktreeIds: readonly string[]
+  requestedWorktreeIds: readonly string[],
+  // Why: only the user's Sleep hides its chats; a project move pauses through this core too.
+  options: { recordExplicitChatSleep?: boolean } = {}
 ): Promise<WorktreeSleepOutcome> {
   // Why unique: both copies of a twin share one id, and sleeping it sleeps the whole workspace.
   const worktreeIds = [...new Set(requestedWorktreeIds)]
@@ -145,6 +176,9 @@ export async function sleepWorktreesReportingFailures(
       // until an explicit wake (#10205); mark per workspace so an earlier
       // slow teardown never leaves a later, still-awake one marked.
       markWorktreeSleepIntent(worktreeId)
+      const capturedChats = (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).filter(
+        isStructuredTab
+      )
       try {
         // Why: sleep mirrors removeWorktree's shutdown sequence — browsers first
         // so destroyPersistentWebview unregisters the Chromium guests before any
@@ -197,6 +231,9 @@ export async function sleepWorktreesReportingFailures(
       results.push(
         ...receipts.map((receipt) => ({ workspaceId: worktreeId, ...receipt, completed }))
       )
+      if (options.recordExplicitChatSleep && (completed || failed)) {
+        recordExplicitChatSleep(worktreeId, completed ? receipts : null, capturedChats)
+      }
     }
   } finally {
     // Why: a failed sleep leaves the workspace awake and retryable.

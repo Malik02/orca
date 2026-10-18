@@ -18,6 +18,7 @@ import {
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { resolveActivatedWorktreeSurface } from './active-worktree-surface'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { withoutSleptChatsForWorkspaces } from '../../../../../../shared/workspace-chat-sleep'
 import {
   pendingActivationTerminalPrepCancels,
   shouldDeferActivationTerminalPrep
@@ -116,6 +117,10 @@ export function createSetActiveWorktree(
         allDead && worktreeId != null
           ? markWorktreeTabsForActivationSpawn(s, worktreeId, { isWakeable, bumpGeneration: true })
           : {}
+      // Why every host: opening either copy wakes the whole workspace, as it does its terminals.
+      const nextSleptChats = withoutSleptChatsForWorkspaces(s.explicitlySleptChatsByWorkspace, [
+        { id: worktreeId }
+      ])
 
       const nextActiveTabTypeByWorktree =
         s.activeTabTypeByWorktree[worktreeId] === activeTabType
@@ -134,6 +139,7 @@ export function createSetActiveWorktree(
         nextActiveTabTypeByWorktree !== s.activeTabTypeByWorktree ||
         nextEverActivated !== s.everActivatedWorktreeIds ||
         nextActiveRepoId !== s.activeRepoId ||
+        nextSleptChats !== s.explicitlySleptChatsByWorkspace ||
         allDead ||
         reconciliationChanged ||
         stateTransition !== undefined
@@ -159,7 +165,10 @@ export function createSetActiveWorktree(
         rightSidebarExplorerView: restoredRightSidebarExplorerView,
         activeTabId,
         everActivatedWorktreeIds: nextEverActivated,
-        ...tabsByWorktreeUpdate
+        ...tabsByWorktreeUpdate,
+        ...(nextSleptChats !== s.explicitlySleptChatsByWorkspace
+          ? { explicitlySleptChatsByWorkspace: nextSleptChats }
+          : {})
       }
     })
 

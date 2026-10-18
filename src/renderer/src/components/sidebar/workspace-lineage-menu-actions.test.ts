@@ -70,7 +70,8 @@ describe('workspace lineage menu actions', () => {
           [grandchild.id]: [{ id: 'grandchild-browser' }]
         },
         unifiedTabsByWorktree: {},
-        agentStatusByPaneKey: {}
+        agentStatusByPaneKey: {},
+        explicitlySleptChatsByWorkspace: {}
       }
     })
 
@@ -97,7 +98,8 @@ describe('workspace lineage menu actions', () => {
         ptyIdsByTabId: { 'child-tab': ['child-pty'] },
         browserTabsByWorktree: {},
         unifiedTabsByWorktree: {},
-        agentStatusByPaneKey: {}
+        agentStatusByPaneKey: {},
+        explicitlySleptChatsByWorkspace: {}
       }
     })
 
@@ -118,7 +120,8 @@ describe('hasSleepableWorkspaceActivity', () => {
         ptyIdsByTabId: { 'tab-1': [] },
         browserTabsByWorktree: {},
         unifiedTabsByWorktree: {},
-        agentStatusByPaneKey: {}
+        agentStatusByPaneKey: {},
+        explicitlySleptChatsByWorkspace: {}
       })
     ).toBe(false)
   })
@@ -130,7 +133,8 @@ describe('hasSleepableWorkspaceActivity', () => {
         ptyIdsByTabId: { 'tab-1': ['pty-1'] },
         browserTabsByWorktree: {},
         unifiedTabsByWorktree: {},
-        agentStatusByPaneKey: {}
+        agentStatusByPaneKey: {},
+        explicitlySleptChatsByWorkspace: {}
       })
     ).toBe(true)
     expect(
@@ -139,7 +143,8 @@ describe('hasSleepableWorkspaceActivity', () => {
         ptyIdsByTabId: {},
         browserTabsByWorktree: { 'wt-1': [{ id: 'browser-1' }] },
         unifiedTabsByWorktree: {},
-        agentStatusByPaneKey: {}
+        agentStatusByPaneKey: {},
+        explicitlySleptChatsByWorkspace: {}
       })
     ).toBe(true)
   })
@@ -158,15 +163,25 @@ describe('hasSleepableWorkspaceActivity', () => {
       sortOrder: 0,
       createdAt: 0
     }
-    const activity = (agentStatusByPaneKey: Record<string, { structuredHostOwned?: true }>) =>
+    const activity = (
+      agentStatusByPaneKey: Record<string, { structuredHostOwned?: true }>,
+      tab: Tab = chat,
+      slept: { tabId: string; sessionId: string }[] = []
+    ) =>
       hasSleepableWorkspaceActivity('wt-1', {
         tabsByWorktree: {},
         ptyIdsByTabId: {},
         browserTabsByWorktree: {},
-        unifiedTabsByWorktree: { 'wt-1': [chat] },
-        agentStatusByPaneKey
+        unifiedTabsByWorktree: { 'wt-1': [tab] },
+        agentStatusByPaneKey,
+        explicitlySleptChatsByWorkspace: { 'local|wt-1': slept }
       })
     expect(activity(hostHeld(chat))).toBe(true)
     expect(activity({})).toBe(false)
+    // An ended chat stays sleepable until an explicit Sleep records that exact session.
+    const ended = { ...chat, executionHostId: 'local' as const }
+    expect(activity({}, ended)).toBe(true)
+    expect(activity({}, ended, [{ tabId: 'chat-1', sessionId: 'session-1' }])).toBe(false)
+    expect(activity({}, ended, [{ tabId: 'chat-1', sessionId: 'old' }])).toBe(true)
   })
 })
