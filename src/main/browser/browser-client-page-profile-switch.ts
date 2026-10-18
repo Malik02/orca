@@ -158,8 +158,8 @@ export class BrowserClientProfileSwitches {
   /** In-flight switches by page; the staged guest once mounted. */
   readonly stagedPages = new Map<string, BrowserClientRetainedPage | null>()
 
-  // Why: a staged guest holds a navigation grant before it replaces the page.
-  navigationClaims(pages: Iterable<BrowserClientRetainedPage>): BrowserClientRetainedPage[] {
+  // Why: a staged guest holds a navigation grant and owns downloads before it replaces the page.
+  withStagedPages(pages: Iterable<BrowserClientRetainedPage>): BrowserClientRetainedPage[] {
     return [...pages, ...[...this.stagedPages.values()].filter((page) => page !== null)]
   }
 

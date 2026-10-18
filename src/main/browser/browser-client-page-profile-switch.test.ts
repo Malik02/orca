@@ -282,6 +282,25 @@ describe('staged client page profile switching', () => {
     expect(h.dependencies.guestBinding.bind).toHaveBeenCalledTimes(1)
   })
 
+  it('lets the staged guest own downloads it starts while loading the page', async () => {
+    const h = await fixture()
+    await h.executor.handle(
+      createCommand('navigate', {
+        command: { type: 'navigate', url: 'https://example.com/report.csv' }
+      }),
+      new AbortController().signal
+    )
+    let owner: { pageHostGeneration: number } | undefined
+    h.dependencies.routeWebContents.navigateGuest.mockImplementationOnce(async () => {
+      owner = h.executor.findPageByWebContentsId(42)
+      return true
+    })
+    expect(await h.executor.handle(switchCommand(), new AbortController().signal)).toEqual({
+      status: 'completed'
+    })
+    expect(owner).toMatchObject({ browserPageId: 'page-a', pageHostGeneration: 8 })
+  })
+
   it('rejects stale generations without preparing or binding anything', async () => {
     const h = await fixture()
     const calls = h.dependencies.routeSessions.preparePage.mock.calls.length

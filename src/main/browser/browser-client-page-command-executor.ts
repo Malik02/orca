@@ -185,16 +185,15 @@ export class BrowserClientPageCommandExecutor {
   close(): Promise<void> {
     this.closed = true
     return (this.closePromise ??= this.navigationFence.fenceBeforeCleanup(
-      this.profileSwitches.navigationClaims(this.pages.values()),
+      this.profileSwitches.withStagedPages(this.pages.values()),
       (claim) => this.dependencies.routeWebContents.revokeNavigation(claim),
       () => this.closePages()
     ))
   }
 
   fenceNavigation(): void {
-    this.navigationFence.fence(
-      this.profileSwitches.navigationClaims(this.pages.values()),
-      (claim) => this.dependencies.routeWebContents.revokeNavigation(claim)
+    this.navigationFence.fence(this.profileSwitches.withStagedPages(this.pages.values()), (claim) =>
+      this.dependencies.routeWebContents.revokeNavigation(claim)
     )
   }
 
@@ -204,7 +203,7 @@ export class BrowserClientPageCommandExecutor {
     }
     this.authorityTransitioning = true
     this.navigationFence.revoke(
-      this.profileSwitches.navigationClaims(this.pages.values()),
+      this.profileSwitches.withStagedPages(this.pages.values()),
       (claim) => this.dependencies.routeWebContents.revokeNavigation(claim)
     )
   }
@@ -279,7 +278,11 @@ export class BrowserClientPageCommandExecutor {
 
   // Why: the download relay only knows the guest WebContents, and staging is keyed by page identity.
   findPageByWebContentsId(webContentsId: number): BrowserClientHostedPageInventory | undefined {
-    return findBrowserClientPageByWebContentsId(this.pages.values(), webContentsId)?.inventory
+    // A staged profile-switch guest already owns its downloads while it loads the page.
+    return findBrowserClientPageByWebContentsId(
+      this.profileSwitches.withStagedPages(this.pages.values()),
+      webContentsId
+    )?.inventory
   }
 
   private async cleanupPage(
