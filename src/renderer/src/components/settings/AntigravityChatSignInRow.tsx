@@ -60,10 +60,17 @@ function chatSignInLine(
         : translate('accounts.antigravity.chatWaiting', 'Finish signing in in your browser.')
     case 'verifying':
       return translate('accounts.antigravity.chatVerifying', 'Finishing sign-in…')
+    // A settled flow only stands in until the host answers whether it is signed in.
     case 'cancelled':
-      return translate('accounts.antigravity.chatCancelled', 'Sign-in cancelled.')
+      return (
+        authLine(auth, host) ??
+        translate('accounts.antigravity.chatCancelled', 'Sign-in cancelled.')
+      )
     case 'expired':
-      return translate('accounts.antigravity.chatExpired', 'Sign-in timed out. Try again.')
+      return (
+        authLine(auth, host) ??
+        translate('accounts.antigravity.chatExpired', 'Sign-in timed out. Try again.')
+      )
     default:
       return authLine(auth, host)
   }
