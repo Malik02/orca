@@ -2902,6 +2902,7 @@
         "agentCommandNotSignedIn": "Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.",
         "agentNotSignedIn": "Sign in to {{agent}}.",
         "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
+        "antigravityNotSignedIn": "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity.",
         "argumentsMissingValue": "Saved Arguments need a value for {{option}}.",
         "argumentsMultipleValues": "Saved Arguments give {{option}} more than one value.",
         "argumentsPositionalPrompt": "Saved Arguments include a prompt.",

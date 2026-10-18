@@ -18158,6 +18158,7 @@
         "claudeManagedNotSignedIn": "Ce compte Claude n’est pas connecté. Reconnectez-vous dans les paramètres des Comptes Claude.",
         "codexSystemNotSignedIn": "Codex n’est pas connecté. Exécutez `{{loginCommand}}`.",
         "codexManagedNotSignedIn": "Ce compte Codex n’est pas connecté. Reconnectez-vous dans les paramètres des Comptes Codex.",
+        "antigravityNotSignedIn": "Antigravity n’est pas connecté. Connectez-vous dans Paramètres → Comptes → Antigravity.",
         "cliMissing": "{{agent}} est introuvable sur l’ordinateur qui exécute cette conversation. Installez-le ou vérifiez sa Commande dans Paramètres → Agents.",
         "signInFirst": "Connectez-vous d'abord.",
         "signInThenRunCommand": "Connectez-vous, puis relancez /{{command}}.",

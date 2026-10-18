@@ -31,6 +31,9 @@ export class AcpAuthRequiredError extends AcpAgentError {
   }
 }
 
+/** The agent printed its sign-in prompt instead of answering, so the message is Orca's, not its. */
+export class AcpSignInPromptError extends AcpAuthRequiredError {}
+
 /** Orca could not read the agent's answer; `data` keeps the raw answer, `issues` why it failed. */
 export class AcpInvalidResponseError extends AcpRpcError {
   constructor(

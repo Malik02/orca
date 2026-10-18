@@ -18089,6 +18089,7 @@
         "claudeManagedNotSignedIn": "この Claude アカウントにサインインしていません。設定の Claude アカウントで再度サインインしてください。",
         "codexSystemNotSignedIn": "Codex にサインインしていません。`{{loginCommand}}` を実行してください。",
         "codexManagedNotSignedIn": "この Codex アカウントにサインインしていません。設定の Codex アカウントで再度サインインしてください。",
+        "antigravityNotSignedIn": "Antigravity にサインインしていません。[設定] → [アカウント] → [Antigravity] でサインインしてください。",
         "cliMissing": "このチャットを実行しているコンピューターで {{agent}} が見つかりませんでした。インストールするか、[設定] → [Agent] の [コマンド] を確認してください。",
         "signInFirst": "先にサインインしてください。",
         "signInThenRunCommand": "サインインしてから、/{{command}} をもう一度実行してください。",

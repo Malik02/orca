@@ -18054,6 +18054,7 @@
         "claudeManagedNotSignedIn": "此 Claude 账户尚未登录。请在 Claude 账户设置中重新登录。",
         "codexSystemNotSignedIn": "Codex 尚未登录。请运行 `{{loginCommand}}`。",
         "codexManagedNotSignedIn": "此 Codex 账户尚未登录。请在 Codex 账户设置中重新登录。",
+        "antigravityNotSignedIn": "Antigravity 尚未登录。请在设置 → 账户 → Antigravity 中登录。",
         "cliMissing": "在运行此聊天的计算机上找不到 {{agent}}。请安装它，或检查设置 → 智能体中的命令。",
         "signInFirst": "请先登录。",
         "signInThenRunCommand": "请登录，然后重新运行 /{{command}}。",

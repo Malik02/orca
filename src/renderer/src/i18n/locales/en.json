@@ -18307,6 +18307,7 @@
         "claudeManagedNotSignedIn": "This Claude account isn't signed in. Sign in again in Claude Accounts settings.",
         "codexSystemNotSignedIn": "Codex isn't signed in. Run `{{loginCommand}}`.",
         "codexManagedNotSignedIn": "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
+        "antigravityNotSignedIn": "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity.",
         "cliMissing": "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
         "signInFirst": "Sign in first.",
         "signInThenRunCommand": "Sign in, then run /{{command}} again.",

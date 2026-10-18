@@ -42,4 +42,9 @@ describe("the host's sign-in and CLI verdict", () => {
       )
     )
   })
+  it('sends Antigravity to its sign-in in Settings', () => {
+    expect(
+      agentSessionFailureSentence({ kind: 'notSignedIn' }, 'row', { provider: 'antigravity' })
+    ).toBe(AGENT_SESSION_FAILURE_COPY.antigravityNotSignedIn)
+  })
 })

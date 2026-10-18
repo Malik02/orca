@@ -18049,6 +18049,7 @@
         "claudeManagedNotSignedIn": "Esta cuenta de Claude no ha iniciado sesión. Vuelve a iniciar sesión en la configuración de Cuentas de Claude.",
         "codexSystemNotSignedIn": "Codex no ha iniciado sesión. Ejecuta `{{loginCommand}}`.",
         "codexManagedNotSignedIn": "Esta cuenta de Codex no ha iniciado sesión. Vuelve a iniciar sesión en la configuración de Cuentas de Codex.",
+        "antigravityNotSignedIn": "Antigravity no ha iniciado sesión. Inicia sesión en Ajustes → Cuentas → Antigravity.",
         "cliMissing": "No se encontró {{agent}} en el equipo que ejecuta este chat. Instálelo o revise su Comando en Ajustes → Agentes.",
         "signInFirst": "Inicie sesión primero.",
         "signInThenRunCommand": "Inicie sesión y vuelva a ejecutar /{{command}}.",
