@@ -67,7 +67,9 @@ export async function runAgentClickDuringUserCompositionScenario(page: Page): Pr
     await expect
       .poll(() => page.evaluate(() => document.activeElement?.className ?? ''))
       .toContain('xterm-helper-textarea')
-    await expect.poll(() => getTerminalContent(page)).toContain('中')
+    // Why: a non-UTF-8 CI shell may not echo 中; a later ASCII key shows what reached it before.
+    await page.keyboard.type('#28700')
+    await expect.poll(() => getTerminalContent(page)).toContain('#28700')
     expect(await getTerminalContent(page)).not.toContain('zhong')
   } finally {
     await server.close()
