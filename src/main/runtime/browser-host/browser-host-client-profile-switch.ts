@@ -102,21 +102,27 @@ export async function switchBrowserHostClientProfile(
     return placement
   } catch (error) {
     input.placements.cancelClientPageReservation(reservation)
-    if (completed || resultPending) {
-      // Remove stale authority so inventory can recover even if the reply is lost.
+    // The client retired the old guest once its switch completed, so that placement is gone.
+    const retireSwitchedPage = () => {
       retirePlacement()
-      if (completed) {
-        closeSettledReplacement()
-        releaseGrant()
-      } else if (resultPending) {
-        // Keep the original ledger sequence and grant until the client settles its switch.
-        void resultPending.then((result) => {
+      closeSettledReplacement()
+      releaseGrant()
+    }
+    if (completed) {
+      retireSwitchedPage()
+    } else if (resultPending) {
+      // Why: until the client settles, the old guest may still be live; a late failure keeps it.
+      void resultPending.then(
+        (result) => {
           if (result.status === 'completed') {
-            closeSettledReplacement()
+            retireSwitchedPage()
           }
+        },
+        () => {
+          retirePlacement()
           releaseGrant()
-        }, releaseGrant)
-      }
+        }
+      )
     }
     throw error
   }

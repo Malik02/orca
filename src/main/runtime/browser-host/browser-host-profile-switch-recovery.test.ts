@@ -78,7 +78,7 @@ describe('profile switch failure convergence', () => {
     await vi.advanceTimersByTimeAsync(11)
     await rejected
     expect(f.placements.cancelClientPageReservation).toHaveBeenCalledOnce()
-    expect(f.placements.completePageRetirement).toHaveBeenCalledOnce()
+    expect(f.placements.completePageRetirement).not.toHaveBeenCalled()
     expect(f.ledger.retirePage).not.toHaveBeenCalled()
     expect(f.ledger.issue).toHaveBeenCalledTimes(1)
     // The client may still be switching, so the page cannot be recreated under it yet.
@@ -117,11 +117,12 @@ describe('profile switch failure convergence', () => {
     expect(f.ledger.advancePageGeneration.mock.invocationCallOrder[0]).toBeLessThan(
       f.ledger.issue.mock.invocationCallOrder[1]
     )
+    expect(f.placements.completePageRetirement).toHaveBeenCalledOnce()
     expect(f.grants.has('page')).toBe(false)
     expect(f.grant.release).toHaveBeenCalledOnce()
   })
 
-  it('releases the grant when a timed-out switch later fails on the client', async () => {
+  it('keeps the original placement when a timed-out switch later fails on the client', async () => {
     vi.useFakeTimers()
     let settle!: (result: { status: 'failed'; errorCode: string }) => void
     const f = recoveryFixture(
@@ -144,8 +145,9 @@ describe('profile switch failure convergence', () => {
     })
     await vi.advanceTimersByTimeAsync(0)
     expect(f.ledger.issue).toHaveBeenCalledTimes(1)
-    expect(f.grants.has('page')).toBe(false)
-    expect(f.grant.release).toHaveBeenCalledOnce()
+    expect(f.placements.completePageRetirement).not.toHaveBeenCalled()
+    expect(f.grants.has('page')).toBe(true)
+    expect(f.grant.release).not.toHaveBeenCalled()
   })
 
   it('closes the completed replacement when the host cannot commit it', async () => {
