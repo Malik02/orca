@@ -169,15 +169,16 @@ function DialogTitle({
   size = 'default',
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title> & {
-  /** `display` is the large headline of the two-column feature tip dialogs. */
-  size?: 'default' | 'display'
+  /** `display` is the large headline of the two-column feature tip dialogs; `compact` is a short
+   *  confirmation's title. */
+  size?: 'default' | 'display' | 'compact'
 }) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
       data-size={size}
       className={cn(
-        'text-lg leading-snug font-semibold break-words data-[size=display]:text-2xl data-[size=display]:leading-tight data-[size=display]:tracking-tight md:data-[size=display]:text-[1.75rem]',
+        'text-lg leading-snug font-semibold break-words data-[size=compact]:text-sm data-[size=display]:text-2xl data-[size=display]:leading-tight data-[size=display]:tracking-tight md:data-[size=display]:text-[1.75rem]',
         className
       )}
       {...props}
@@ -187,12 +188,17 @@ function DialogTitle({
 
 function DialogDescription({
   className,
+  size = 'default',
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Description>) {
+}: React.ComponentProps<typeof DialogPrimitive.Description> & {
+  /** `compact` pairs with a compact title in a short confirmation. */
+  size?: 'default' | 'compact'
+}) {
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn('text-sm text-muted-foreground', className)}
+      data-size={size}
+      className={cn('text-sm text-muted-foreground data-[size=compact]:text-xs', className)}
       {...props}
     />
   )

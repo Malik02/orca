@@ -102,7 +102,7 @@ export function ConfirmationDialogProvider({
       >
         <DialogContent
           showCloseButton={false}
-          className={cn(compact ? 'max-w-sm' : 'sm:max-w-md', Icon && 'gap-6')}
+          className={cn('sm:max-w-md', Icon && 'gap-6')}
           onOpenAutoFocus={(event) => {
             if (activeRequest?.options.initialFocus === 'confirm') {
               event.preventDefault()
@@ -117,15 +117,15 @@ export function ConfirmationDialogProvider({
               </div>
             )}
             <DialogHeader className={cn(Icon && 'min-w-0 gap-2 text-left')}>
-              <DialogTitle className={cn(compact && 'text-sm')}>
+              <DialogTitle size={compact ? 'compact' : 'default'}>
                 {displayedRequest?.options.title}
               </DialogTitle>
               {displayedRequest?.options.description ? (
                 // Callers pass multi-line descriptions (e.g. one path per line).
                 <DialogDescription
+                  size={compact ? 'compact' : 'default'}
                   className={cn(
                     'whitespace-pre-line',
-                    compact && 'text-xs',
                     displayedRequest.options.descriptionClassName
                   )}
                 >
@@ -152,7 +152,6 @@ export function ConfirmationDialogProvider({
           ) : null}
           <DialogFooter
             className={cn(
-              compact && 'gap-2',
               Icon && '-mx-6 -mb-6 rounded-b-lg border-t border-border bg-muted/30 px-6 py-4'
             )}
           >
