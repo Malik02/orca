@@ -11,10 +11,11 @@ import {
 import { deriveBrowserRoutePartition } from '../../browser/browser-route-identity'
 import { setBrowserHostClientProfileResolver } from './browser-host-client-profile-metadata'
 
-async function fixture(supported = true) {
+async function fixture(supported = true, onClientPageReleased?: (browserPageId: string) => void) {
   const leases = new BrowserHostLeaseRegistry({
     authorityRuntimeId: 'runtime-a',
-    authorityEpoch: 'epoch-a'
+    authorityEpoch: 'epoch-a',
+    onClientPageReleased
   })
   const lease = leases.attach({
     browserHostClientId: 'client-a',
@@ -265,6 +266,14 @@ describe('negotiated profile switch over the command transport', () => {
       }
     }
   )
+
+  it('releases download transfers of the replaced generation once the switch commits', async () => {
+    const released = vi.fn()
+    const f = await fixture(true, released)
+    await f.leases.switchClientPageProfile(f.authority, isolated)
+    expect(released).toHaveBeenCalledWith('page-a')
+    await f.h.executor.close()
+  })
 
   it('rejects arbitrary partition metadata instead of admitting a local cookie jar', () => {
     expect(() =>

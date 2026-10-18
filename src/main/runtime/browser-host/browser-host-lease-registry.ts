@@ -214,16 +214,19 @@ export class BrowserHostLeaseRegistry {
     })
   }
 
-  switchClientPageProfile(
+  async switchClientPageProfile(
     authority: BrowserClientPageAuthority,
     profile: BrowserClientProfileMetadata
-  ) {
-    return switchBrowserHostClientProfile(authority, profile, {
+  ): Promise<RuntimeBrowserClientPlacement> {
+    const placement = await switchBrowserHostClientProfile(authority, profile, {
       registry: this,
       state: (clientId) => this.requireLeaseState(this.select(clientId, [])),
       placements: this.pagePlacements,
       grants: this.clientPageExecutionHostGrants
     })
+    // The client retired the old guest, so its transfers can never finish under the new generation.
+    this.options.onClientPageReleased?.(authority.browserPageId)
+    return placement
   }
 
   requireClientPage(authority: BrowserClientPageAuthority): RuntimeBrowserClientPlacement {
