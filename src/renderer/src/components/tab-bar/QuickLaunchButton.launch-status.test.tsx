@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type { MouseEvent, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredLaunchState } from '@/lib/structured-agent-session-launch-registry'
@@ -38,17 +38,9 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
     children,
     disabled,
     title,
-    onClick,
     onSelect
   }: { children: ReactNode } & DivProps) => (
-    <div
-      aria-disabled={disabled ? 'true' : 'false'}
-      title={title}
-      onClick={(event) => {
-        onClick?.(event)
-        onSelect?.()
-      }}
-    >
+    <div aria-disabled={disabled ? 'true' : 'false'} title={title} onClick={onSelect}>
       {children}
     </div>
   ),
@@ -66,12 +58,7 @@ vi.mock('sonner', () => ({
 }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: launchMock }))
 
-type DivProps = {
-  disabled?: boolean
-  title?: string
-  onClick?: (event: MouseEvent<HTMLDivElement>) => void
-  onSelect?: () => void
-}
+type DivProps = { disabled?: boolean; title?: string; onSelect?: () => void }
 
 import { QuickLaunchAgentMenuItems, ProjectedAgentMenuItems } from './QuickLaunchButton'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
@@ -293,7 +280,12 @@ describe('QuickLaunchAgentMenuItems launches', () => {
       />
     )
     model.mockRestore()
-    fireEvent.click(document.querySelector('button[title="Launch Codex in a new terminal"]')!)
+    const terminalButton = document.querySelector<HTMLButtonElement>(
+      'button[title="Launch Codex in a new terminal"]'
+    )!
+    terminalButton.focus()
+    fireEvent.click(terminalButton)
+    terminalButton.blur()
 
     expect(launchMock).toHaveBeenCalledOnce()
     expect(launchMock.mock.calls[0][0]).toMatchObject({

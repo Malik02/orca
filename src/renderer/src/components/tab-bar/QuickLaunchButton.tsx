@@ -48,6 +48,8 @@ export type QuickLaunchAgentMenuItemsProps = {
   disabled?: boolean
 }
 
+const ROW_NAVIGATION_KEYS = new Set(['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'])
+
 const PLACEHOLDER_WIDTHS = ['w-3/5', 'w-1/2', 'w-2/3', 'w-2/5', 'w-3/4', 'w-1/3', 'w-4/5', 'w-1/4']
 
 function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
@@ -292,20 +294,23 @@ function ChatRow({
   children: React.ReactNode
 }): React.JSX.Element {
   const cliButton = useRef<HTMLButtonElement>(null)
-  const opensCli = useRef(false)
   const cliRow: NewTabAgentMenuRow = { ...row, kind: 'cli' }
   const cliTitle = rowTitle(cliRow, label)
+  const chatTitle = rowTitle(row, label)
   return (
     <DropdownMenuItem
       variant="launch"
       disabled={disabled}
-      title={rowTitle(row, label)}
-      // Why: the button's click bubbles into this item, so Radix selects and closes the menu either way.
-      onClick={(event) => {
-        opensCli.current =
-          event.target instanceof Node && cliButton.current?.contains(event.target) === true
+      title={chatTitle}
+      aria-label={chatTitle}
+      // Why: the button's click (or a drag released on it) selects this item, so Radix closes the
+      // menu either way; the pointer or focus on the button is what asks for the CLI.
+      onSelect={() => {
+        const button = cliButton.current
+        const opensCli =
+          button !== null && (button.matches(':hover') || button === document.activeElement)
+        runLaunch(opensCli ? cliRow : row)
       }}
-      onSelect={() => runLaunch(opensCli.current ? cliRow : row)}
       onKeyDown={(event) => {
         if (event.key === 'ArrowRight') {
           event.preventDefault()
@@ -327,10 +332,15 @@ function ChatRow({
             event.preventDefault()
             event.stopPropagation()
             event.currentTarget.click()
-          } else if (event.key === 'ArrowLeft') {
+          } else if (ROW_NAVIGATION_KEYS.has(event.key)) {
             event.preventDefault()
             event.stopPropagation()
-            event.currentTarget.closest<HTMLElement>('[role="menuitem"]')?.focus()
+            const item = event.currentTarget.closest<HTMLElement>('[role="menuitem"]')
+            item?.focus()
+            // Why: roving focus ignores keys from inside an item, so the row replays the move.
+            if (event.key !== 'ArrowLeft') {
+              item?.dispatchEvent(new KeyboardEvent('keydown', { key: event.key, bubbles: true }))
+            }
           }
         }}
       >
