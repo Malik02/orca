@@ -118,7 +118,15 @@ export async function switchBrowserClientPageProfile(input: {
     }
     input.commit(staged)
   } catch (error) {
+    const oldAlive = old.lifecycleClaim.isCurrent()
     try {
+      if (bindingAttempted && oldAlive) {
+        // Rebind first: releasing the staged binding would otherwise cancel the page's downloads.
+        dependencies.guestBinding.bind({
+          registration: old.registration,
+          browserProfileId: old.inventory.browserProfileId
+        })
+      }
       if (staged) {
         const cleanup = input.cleanup(staged, false)
         switches.retainedCleanups.add(cleanup)
@@ -138,11 +146,6 @@ export async function switchBrowserClientPageProfile(input: {
         markBrowserClientPageUnavailable(input.pages, old.registration, (id, generation) =>
           dependencies.onPageUnavailable?.(id, generation)
         )
-      } else if (bindingAttempted) {
-        dependencies.guestBinding.bind({
-          registration: old.registration,
-          browserProfileId: old.inventory.browserProfileId
-        })
       }
     }
     throw error
