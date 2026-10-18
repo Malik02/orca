@@ -13,6 +13,8 @@ export type ManagedRuntimeInstallView = {
   /** Why the last operation or status read failed. */
   error: string | null
   action: ManagedRuntimeInstallAction | null
+  /** The action is the first step to using the agent, so Settings draws it as a button. */
+  prominent: boolean
   /** Settings may offer to delete the copy Orca installed: one is there and nothing runs. */
   removable: boolean
   /** A removal runs, so the line shows it as work in progress. */
@@ -28,6 +30,7 @@ const EMPTY: ManagedRuntimeInstallView = {
   progress: null,
   error: null,
   action: null,
+  prominent: false,
   removable: false,
   removing: false,
   note: null
@@ -142,15 +145,18 @@ function settledView(state: ManagedRuntimeInstallState, agent: string): ManagedR
   }
   // The size says what Install costs.
   const size = state.downloadBytes
-  return view(
-    translate('components.managed-runtime.notInstalled', 'Not installed.'),
-    install,
-    size === undefined
-      ? null
-      : translate('components.managed-runtime.downloadSize', '{{size}} MB download.', {
-          size: Math.ceil(size / 1_000_000)
-        })
-  )
+  return {
+    ...view(
+      translate('components.managed-runtime.notInstalled', 'Not installed.'),
+      install,
+      size === undefined
+        ? null
+        : translate('components.managed-runtime.downloadSize', '{{size}} MB download.', {
+            size: Math.ceil(size / 1_000_000)
+          })
+    ),
+    prominent: true
+  }
 }
 
 /** What an install row says and offers for the host's answer. `cancelling`: this row's Cancel is

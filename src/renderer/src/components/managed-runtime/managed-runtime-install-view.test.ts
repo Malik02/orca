@@ -38,6 +38,7 @@ describe('managedRuntimeInstallView', () => {
       source: 'managed' as const
     }
     expect(shown({})).toEqual(['Not installed.', 'Install', null, null])
+    expect(managedRuntimeInstallView({ kind: 'known', state: idle }, 'Fake').prominent).toBe(true)
     expect(shown({ downloadBytes: 111_456_962 })).toEqual([
       'Not installed.',
       'Install',

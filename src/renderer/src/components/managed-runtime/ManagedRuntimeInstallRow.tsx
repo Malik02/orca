@@ -7,6 +7,7 @@ import {
 } from '@/runtime/managed-runtime-install-status'
 import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
 import { LoadingSpinner } from '../LoadingSpinner'
+import { Button } from '../ui/button'
 import { Progress } from '../ui/progress'
 import {
   managedRuntimeInstallView,
@@ -19,11 +20,12 @@ import { ManagedRuntimeRemoveButton } from './ManagedRuntimeRemoveButton'
 const said = (text: string, last: boolean): string => (last ? text : text.replace(/[.。]$/u, ''))
 
 /** Settings' one-line install state for the runtime Orca provides an agent, on the host it runs on,
- *  with its actions as links. A chat's install card shows the same host answer, so either one's
- *  action moves both. */
+ *  with its actions as links, except a first Install, which is a button the caller places at its
+ *  row's end. A chat's install card shows the same host answer, so either one's action moves both. */
 export function ManagedRuntimeInstallRow(props: {
   observation: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
   agentLabel: string
+  children: (line: React.ReactNode, button: React.ReactNode) => React.ReactNode
 }): React.JSX.Element {
   const { observation, agentLabel } = props
   // A click holds its button until the host answers, so a double click starts nothing twice.
@@ -50,7 +52,8 @@ export function ManagedRuntimeInstallRow(props: {
       .finally(() => setPending(null))
   }
   const alert = refusal ?? view.error
-  const { action } = view
+  const button = view.prominent ? view.action : null
+  const action = button ? null : view.action
   const removable = observation.removable && view.removable
   const primary = (chosen: ManagedRuntimeInstallAction) => () =>
     chosen.kind === 'cancel'
@@ -108,7 +111,7 @@ export function ManagedRuntimeInstallRow(props: {
     parts.push(<span key="note">{view.note}</span>)
   }
   // The line keeps its height while the first read is out, so nothing shifts when it lands.
-  return (
+  const line = (
     <div
       role="status"
       aria-live="polite"
@@ -118,5 +121,21 @@ export function ManagedRuntimeInstallRow(props: {
         index === 0 ? [part] : [<span key={`sep-${index}`}>·</span>, part]
       )}
     </div>
+  )
+  return (
+    <>
+      {props.children(
+        line,
+        button ? (
+          <Button
+            size="xs"
+            disabled={pending !== null}
+            onClick={() => act(button.kind, primary(button))}
+          >
+            {button.label}
+          </Button>
+        ) : null
+      )}
+    </>
   )
 }
