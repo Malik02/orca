@@ -34,7 +34,11 @@ vi.mock('@/runtime/runtime-file-watch-client', () => ({
   subscribeRuntimeFileChanges: subscriptionState.subscribeRuntimeFileChanges
 }))
 vi.mock('./editor-external-watch-targets', () => ({
-  selectEditorExternalWatchTargets: () => subscriptionState.snapshot,
+  selectEditorExternalWatchTargets: () => ({
+    unwatchedTargetKeys: new Set<string>(),
+    unwatchedTargetsKey: '',
+    ...subscriptionState.snapshot
+  }),
   getEditorExternalWatchTargetKey: (target: TestWatchTarget) =>
     [
       target.worktreeId,

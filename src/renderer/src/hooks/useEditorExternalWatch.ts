@@ -10,6 +10,10 @@ import {
 } from './editor-external-watch-targets'
 import { buildEditorExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
 import { verifyLatchedEditorMoveDestinations } from './editor-external-watch-disk-verification'
+import {
+  armEditorTabDiskVerification,
+  reloadCleanEditorTabs
+} from './editor-external-watch-rewatch-reload'
 
 function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknown): void {
   console.warn('[filesystem-watch] failed to watch worktree', {
@@ -22,10 +26,12 @@ function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknow
 
 /** Keeps editor filesystem subscriptions alive beyond any individual editor surface. */
 export function useEditorExternalWatch(): void {
-  const { targets, targetsKey } = useAppStore(selectEditorExternalWatchTargets)
+  const snapshot = useAppStore(selectEditorExternalWatchTargets)
+  const { targetsKey, unwatchedTargetsKey } = snapshot
   const targetsRef = useRef<EditorExternalWatchTarget[]>([])
-  const latestTargetsRef = useRef<EditorExternalWatchTarget[]>(targets)
-  latestTargetsRef.current = targets
+  const unwatchedTargetKeysRef = useRef<ReadonlySet<string>>(new Set())
+  const latestSnapshotRef = useRef(snapshot)
+  latestSnapshotRef.current = snapshot
   const remoteWatchUnsubsRef = useRef(new Map<string, () => void>())
   const fsChangedHandlerRef = useRef<
     ((payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void) | null
@@ -33,7 +39,9 @@ export function useEditorExternalWatch(): void {
 
   // Why: diff targets so unchanged worktrees keep their subscription; full teardown on every store change drops events in the gap.
   useEffect(() => {
-    const nextTargets = latestTargetsRef.current
+    const nextTargets = latestSnapshotRef.current.targets
+    const previousUnwatchedKeys = unwatchedTargetKeysRef.current
+    unwatchedTargetKeysRef.current = latestSnapshotRef.current.unwatchedTargetKeys
     const previousTargets = targetsRef.current
     const previousKeys = new Set(previousTargets.map(getEditorExternalWatchTargetKey))
     const nextKeys = new Set(nextTargets.map(getEditorExternalWatchTargetKey))
@@ -58,11 +66,19 @@ export function useEditorExternalWatch(): void {
       }
     }
     for (const target of added) {
+      // Why: its open tabs went unwatched (background trim), so writes made meanwhile were never seen.
+      const missedWrites = previousUnwatchedKeys.has(getEditorExternalWatchTargetKey(target))
+      if (missedWrites) {
+        armEditorTabDiskVerification(target)
+      }
       if (target.runtimeEnvironmentId) {
         subscribeRuntimeTarget(target, remoteWatchUnsubsRef.current, fsChangedHandlerRef)
+        if (missedWrites) {
+          reloadCleanEditorTabs(target)
+        }
         continue
       }
-      void window.api.fs
+      const installed = window.api.fs
         .watchWorktree({
           worktreePath: target.worktreePath,
           connectionId: target.connectionId
@@ -71,10 +87,14 @@ export function useEditorExternalWatch(): void {
           // Why: SSH providers can disappear while tabs still reference the worktree; report the failure without an uncaught renderer promise.
           warnExternalWatchFailure(target, err)
         })
+      if (missedWrites) {
+        // Why: reload once the watch is live so a write landing during install is not lost.
+        void installed.then(() => reloadCleanEditorTabs(target))
+      }
     }
     targetsRef.current = nextTargets
     // Why: final unmount cleanup owns teardown so target changes remain differential.
-  }, [targetsKey])
+  }, [targetsKey, unwatchedTargetsKey])
 
   // Why: one stable fs:changed listener prevents target-key changes from opening an event-loss gap.
   useEffect(() => {
@@ -109,6 +129,7 @@ export function useEditorExternalWatch(): void {
       }
       remoteWatchUnsubs.clear()
       targetsRef.current = []
+      unwatchedTargetKeysRef.current = new Set()
       // Why: module-scoped reload timers survive StrictMode's synthetic cleanup; a late reload dispatch is harmless.
     }
   }, [])
