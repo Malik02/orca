@@ -32,6 +32,9 @@ function isUserComposing(): boolean {
 
 /** Tracks the window's open IME composition, by the terminal tracker's rules; returns the unsubscribe. */
 export function watchUserComposition(): () => void {
+  if (typeof document === 'undefined') {
+    return () => {}
+  }
   const onStart = (event: Event): void => {
     composingElement = event.target
   }
