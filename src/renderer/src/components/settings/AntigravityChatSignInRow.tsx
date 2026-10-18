@@ -71,7 +71,9 @@ function chatSignInLine(
         authLine(auth, host) ??
         translate('accounts.antigravity.chatExpired', 'Sign-in timed out. Try again.')
       )
-    default:
+    case 'failed':
+    case 'signedIn':
+    case undefined:
       return authLine(auth, host)
   }
 }
