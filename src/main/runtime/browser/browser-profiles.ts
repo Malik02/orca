@@ -41,7 +41,10 @@ export class RuntimeBrowserProfiles {
       RuntimeBrowserCommandTargets,
       'requireAgentBrowserBridge' | 'resolveBrowserCommandTarget'
     >,
-    private readonly catalog: Pick<RuntimeBrowserTabCatalog, 'describeBrowserTab'>
+    private readonly catalog: Pick<
+      RuntimeBrowserTabCatalog,
+      'describeBrowserTab' | 'resolveClientHostedBrowserPage'
+    >
   ) {}
 
   async browserTabSetProfile(
@@ -49,16 +52,6 @@ export class RuntimeBrowserProfiles {
       profileId: string
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabSetProfileResult> {
-    const target = await this.targets.resolveBrowserCommandTarget(params)
-    const pages = this.host.getRuntimeBrowserPageRegistry()
-    const activeClientPage = pages.listPages(target.worktreeId).find((page) => page.active)
-    const browserPageId =
-      target.browserPageId ??
-      activeClientPage?.browserPageId ??
-      this.targets.requireAgentBrowserBridge().getActivePageId(target.worktreeId)
-    if (!browserPageId) {
-      throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
-    }
     // Why: 'default' is a synthetic id; fall back to the registry's default profile when not registered.
     const profile =
       browserSessionRegistry.getProfile(params.profileId) ??
@@ -70,11 +63,10 @@ export class RuntimeBrowserProfiles {
       )
     }
 
-    const clientPage = pages.getPage(browserPageId)
+    // Why first: the server-local target path cannot resolve folder workspaces or remote guests.
+    const clientPage = await this.catalog.resolveClientHostedBrowserPage(params)
     if (clientPage) {
-      if (target.worktreeId && clientPage.workspaceId !== target.worktreeId) {
-        throw new BrowserError('invalid_argument', 'Browser page belongs to another workspace')
-      }
+      const { browserPageId } = clientPage
       if (clientPage.browserProfileId === profile.id) {
         return { browserPageId, profileId: profile.id, profileLabel: profile.label }
       }
@@ -90,15 +82,25 @@ export class RuntimeBrowserProfiles {
         },
         { id: profile.id, label: profile.label, scope: profile.scope }
       )
-      pages.replaceClientPagePlacement(
-        browserPageId,
-        clientPage.placement,
-        placement,
-        undefined,
-        profile.id
-      )
+      this.host
+        .getRuntimeBrowserPageRegistry()
+        .replaceClientPagePlacement(
+          browserPageId,
+          clientPage.placement,
+          placement,
+          undefined,
+          profile.id
+        )
       this.host.notifyHeadlessBrowserSessionTabsChanged?.(clientPage.workspaceId)
       return { browserPageId, profileId: profile.id, profileLabel: profile.label }
+    }
+
+    const target = await this.targets.resolveBrowserCommandTarget(params)
+    const browserPageId =
+      target.browserPageId ??
+      this.targets.requireAgentBrowserBridge().getActivePageId(target.worktreeId)
+    if (!browserPageId) {
+      throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
 
     // Why: short-circuit no-op switches so the renderer doesn't needlessly tear down and remount the webview.

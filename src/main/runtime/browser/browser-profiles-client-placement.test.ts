@@ -26,6 +26,7 @@ vi.mock('../../ipc/browser-tab-registration-wait', () => ({
   waitForTabRegistration: mocks.wait
 }))
 import { RuntimeBrowserProfiles } from './browser-profiles'
+import { RuntimeBrowserTabCatalog } from './browser-tab-catalog'
 
 const profiles = [
   { scope: 'default', id: 'default', label: 'Default', partition: 'persist:local-default' },
@@ -60,6 +61,9 @@ function fixture(currentProfile = 'isolated') {
     .spyOn(leases, 'switchClientPageProfile')
     .mockRejectedValue(new Error('requires staged replacement support on both peers'))
   const notify = vi.fn()
+  const localTarget = vi.fn(async () => {
+    throw new Error('must not resolve a server-local target')
+  })
   const runtime = new RuntimeBrowserProfiles(
     {
       getRuntimeBrowserPageRegistry: () => pages,
@@ -67,16 +71,20 @@ function fixture(currentProfile = 'isolated') {
       getBrowserHostLeaseRegistry: () => leases,
       notifyHeadlessBrowserSessionTabsChanged: notify
     },
-    {
-      resolveBrowserCommandTarget: async (params) => ({
-        browserPageId: params.page,
-        worktreeId: params.worktree
-      }),
-      requireAgentBrowserBridge: bridge
-    },
-    { describeBrowserTab: vi.fn() }
+    { resolveBrowserCommandTarget: localTarget, requireAgentBrowserBridge: bridge },
+    new RuntimeBrowserTabCatalog(
+      {
+        getAgentBrowserBridge: () => null,
+        // Folder selectors resolve here, never through the server-local worktree resolver.
+        resolveBrowserWorkspace: async (selector) => ({
+          id: selector === 'id:folder:workspace' ? 'workspace' : selector
+        }),
+        getRuntimeBrowserPageRegistry: () => pages
+      },
+      { requireAgentBrowserBridge: bridge }
+    )
   )
-  return { pages, runtime, window, bridge, switchProfile, notify }
+  return { pages, runtime, window, bridge, switchProfile, notify, localTarget }
 }
 
 describe('client placement profile switch safety', () => {
@@ -163,7 +171,16 @@ describe('client placement profile switch safety', () => {
         worktree: 'another-workspace',
         profileId: 'isolated'
       })
-    ).rejects.toThrow('belongs to another workspace')
+    ).rejects.toThrow('was not found in this worktree')
+  })
+
+  it('resolves a folder-workspace page without the server-local target path', async () => {
+    const { runtime, localTarget, window } = fixture()
+    await expect(
+      runtime.browserTabSetProfile({ worktree: 'id:folder:workspace', profileId: 'isolated' })
+    ).resolves.toMatchObject({ browserPageId: 'remote-page', profileId: 'isolated' })
+    expect(localTarget).not.toHaveBeenCalled()
+    expect(window).not.toHaveBeenCalled()
   })
 
   it('normalizes synthetic default before comparing the authoritative identity', async () => {
