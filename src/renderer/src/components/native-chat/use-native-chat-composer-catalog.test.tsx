@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { buildNativeChatPickerItems, classifyPickerCommands } from './native-chat-picker-items'
+import {
+  buildNativeChatPickerItems,
+  classifyPickerCommands
+} from '../../../../shared/native-chat-picker-items'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
@@ -22,12 +25,12 @@ describe('composer catalog authority', () => {
   it('keeps PTY and unsupported structured providers on their original catalogs', () => {
     const pty = renderHook(() => useNativeChatComposerCatalog('claude'))
     expect(pty.result.current.agentCommands).toEqual(getVerifiedNativeChatCommands('claude'))
-    expect(pty.result.current.sessionSkillNames).toBeUndefined()
+    expect(pty.result.current.sessionSkills).toBeUndefined()
     const oldHost = renderHook(() => useNativeChatComposerCatalog('claude', transport()))
     expect(oldHost.result.current.agentCommands).toEqual(
       withNativeChatResumeCommand(structuredSlashCommands())
     )
-    expect(oldHost.result.current.sessionSkillNames).toBeUndefined()
+    expect(oldHost.result.current.sessionSkills).toBeUndefined()
   })
   it('offers supported conversation commands when the host has no reported catalog', () => {
     const { result, rerender } = renderHook(
@@ -89,12 +92,12 @@ describe('composer catalog authority', () => {
     )
     expect(result.current).toEqual({
       agentCommands: withNativeChatResumeCommand([]),
-      sessionSkillNames: []
+      sessionSkills: []
     })
     rerender({ reported: [{ name: 'custom-command', kind: 'command' }] })
     expect(result.current).toEqual({
       agentCommands: withNativeChatResumeCommand([{ name: 'custom-command' }]),
-      sessionSkillNames: []
+      sessionSkills: []
     })
   })
   // Orca's /resume takes an agent command's place, but a skill of that name stays the agent's.
@@ -107,7 +110,7 @@ describe('composer catalog authority', () => {
     const { result } = renderHook(() => useNativeChatComposerCatalog('claude', transport(reported)))
     const catalog = result.current
     const rows = (query: string) =>
-      buildNativeChatPickerItems(catalog.agentCommands, [], query, '/', catalog.sessionSkillNames)
+      buildNativeChatPickerItems(catalog.agentCommands, [], query, '/', catalog.sessionSkills)
     expect(rows('').map(({ kind, name }) => `${kind}:${name}`)).toEqual([
       'command:review',
       'command:resume',
@@ -151,7 +154,7 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
         ],
         '',
         '/',
-        catalog.sessionSkillNames
+        catalog.sessionSkills
       )
       return useNativeChatComposerKeyDown({
         autocomplete: {
@@ -232,7 +235,7 @@ describe('OpenCode chat skills', () => {
       skills,
       '',
       '/',
-      result.current.sessionSkillNames
+      result.current.sessionSkills
     ).filter((item) => !(item.kind === 'command' && item.orcaOwned))
   }
   const rows = (...args: Parameters<typeof items>) =>

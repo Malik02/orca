@@ -92,8 +92,8 @@ function useSettledSidebarWorktreeSortOrder(args: {
   // Why: stable ID order prevents rank-only refreshes from echoing an unchanged snapshot.
   const sortedIds = useReusedArrayIdentity(recomputedSort.sortedIds)
 
-  // Why: main's copy of the latch and retention lives as long as this list, as the ref above does.
-  useSidebarListSession(sortBy, sortedIds)
+  // Why: main's sleeping retention lives as long as this list.
+  useSidebarListSession()
 
   // Why after commit: a discarded render must not latch Smart onto a live signal that never committed.
   useEffect(() => {
@@ -199,7 +199,7 @@ function useStampSidebarWorktreeSortOrder(args: {
   )
   const sortedIds = useReusedArrayIdentity(ranked)
   // Why: main's sleeping retention lives as long as this list.
-  useSidebarListSession(sortBy, sortedIds)
+  useSidebarListSession()
   useTrackSmartToRecentSwitch(sortBy)
   return sortedIds
 }

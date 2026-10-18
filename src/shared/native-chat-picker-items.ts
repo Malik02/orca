@@ -1,17 +1,7 @@
-import type { DiscoveredSkill, SkillSourceKind } from '../../../../shared/skills'
-import type { SlashCommandSuggestion } from '../../../../shared/native-chat-slash-commands'
-import {
-  isSafeDisplayCharacter,
-  stripUnsafeDisplayCharacters
-} from '../../../../shared/skill-display-text'
-import { compareBaseSensitivityLocaleText } from '@/lib/locale-text-collators'
-
-// Send classification lives in shared so mobile gates optimistic echoes with
-// the same rules; re-exported here to keep renderer import paths stable.
-export {
-  classifyNativeChatSend,
-  type NativeChatSendClassification
-} from '../../../../shared/native-chat-slash-commands'
+import type { DiscoveredSkill, SkillSourceKind } from './skills'
+import type { NativeChatSessionSkill, SlashCommandSuggestion } from './native-chat-slash-commands'
+import { isSafeDisplayCharacter, stripUnsafeDisplayCharacters } from './skill-display-text'
+import { compareBaseSensitivityLocaleText } from './locale-text-collators'
 
 export type NativeChatPickerItem =
   | {
@@ -86,7 +76,9 @@ export function buildNativeChatPickerItems(
   skills: readonly DiscoveredSkill[],
   query: string,
   skillSigil: '/' | '$',
-  sessionSkillNames?: readonly string[]
+  sessionSkills?: readonly NativeChatSessionSkill[],
+  /** Rows kept per group; a caller that needs every skill passes Infinity. */
+  limit = PICKER_RESULT_LIMIT
 ): NativeChatPickerItem[] {
   // A name can only collide when both kinds invoke through the same sigil;
   // where skills carry their own, `/review` and `$review` are distinct entries.
@@ -94,12 +86,7 @@ export function buildNativeChatPickerItems(
   const unclassifiedNames = new Set(
     commands.filter((command) => command.kindUnspecified).map((command) => command.name)
   )
-  const mergedSkills = mergeNativeChatSkills(
-    skills,
-    sessionSkillNames,
-    unclassifiedNames,
-    skillSigil
-  )
+  const mergedSkills = mergeNativeChatSkills(skills, sessionSkills, unclassifiedNames, skillSigil)
   const skillNames = new Set(mergedSkills.map((skill) => skill.name))
   const orcaNames = new Set(commands.filter((c) => c.orcaOwned).map((command) => command.name))
   const resolvedCommands = commands.filter(
@@ -140,15 +127,12 @@ export function buildNativeChatPickerItems(
       .map((item, index) => ({ item, stableOrder: index })),
     query
   )
-  return [
-    ...commandItems.slice(0, PICKER_RESULT_LIMIT),
-    ...skillItems.slice(0, PICKER_RESULT_LIMIT)
-  ]
+  return [...commandItems.slice(0, limit), ...skillItems.slice(0, limit)]
 }
 
 function mergeNativeChatSkills(
   skills: readonly DiscoveredSkill[],
-  sessionSkillNames: readonly string[] | undefined,
+  sessionSkills: readonly NativeChatSessionSkill[] | undefined,
   unclassifiedNames: ReadonlySet<string>,
   skillSigil: '/' | '$'
 ): Extract<NativeChatPickerItem, { kind: 'skill' }>[] {
@@ -178,14 +162,20 @@ function mergeNativeChatSkills(
   // the session ignored must not be offered. The scan stays the source of
   // description and scope for the names both know about.
   const names =
-    sessionSkillNames !== undefined
+    sessionSkills !== undefined
       ? [
-          ...sessionSkillNames.filter(isTokenSafe),
+          ...sessionSkills.map((skill) => skill.name).filter(isTokenSafe),
           ...[...discovered.keys()].filter((name) => unclassifiedNames.has(name))
         ]
       : [...discovered.keys()]
   return [...new Set(names)]
-    .map((name) => discovered.get(name) ?? pickerSkill(name, [], skillSigil))
+    .map((name) => {
+      const skill = discovered.get(name) ?? pickerSkill(name, [], skillSigil)
+      const reported = sessionSkills?.find((entry) => entry.name === name)?.description
+      return skill.description === null && reported
+        ? { ...skill, description: sanitizePickerText(reported, 240) }
+        : skill
+    })
     .sort(comparePickerSkills)
 }
 

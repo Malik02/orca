@@ -70,8 +70,8 @@ export function sidebarInputsFeedDomains(
     {
       name: 'temporal',
       read: () => {
-        const { sessionId, sortSnapshot, retention } = facts.getSidebarTemporalSnapshot()
-        return { sessionId, sortSnapshot, retention }
+        const { sessionId, retention } = facts.getSidebarTemporalSnapshot()
+        return { sessionId, retention }
       },
       watch: (changed) => facts.onSidebarTemporalChange(changed)
     },
