@@ -73,6 +73,8 @@ it('keeps the root and README guards on ready docs-only PRs without another runn
   const { workflow: prWorkflow } = workflows.find(({ file }) => file === 'pr.yml')
   const detector = prWorkflow.jobs.code_paths
   const eligible = compileAggregateExpression(detector.if ?? 'true', ['github', 'steps', 'needs'])
+  expect(admitted(detector.if, true)).toBe(false)
+  expect(admitted(prWorkflow.jobs.verify.if, true)).toBe(false)
   for (const shouldRun of ['false', 'true']) {
     expect(
       eligible({

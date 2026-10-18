@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { removeStructuredLaunchSlot } from './structured-agent-session-launch-cancellation'
+import { removeStructuredLaunchSlot } from './structured-agent-session-launch-slot'
 import {
   materializeStructuredLaunchSurface,
   findStructuredLaunchTab

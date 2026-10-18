@@ -26,7 +26,6 @@ import { translate } from '@/i18n/i18n'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
-import { TabCloseTooltip } from './TabCloseTooltip'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
 import {
   isTerminalTabActivityLive,
@@ -59,6 +58,7 @@ export type SortableTabProps = {
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onCloseToLeft: (tabId: string) => void
+  onCloseSplitPane?: () => void
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
@@ -93,6 +93,7 @@ export default function SortableTab({
   onCloseOthers,
   onCloseToRight,
   onCloseToLeft,
+  onCloseSplitPane,
   onSetCustomTitle,
   onSetTabColor,
   onTogglePin,
@@ -325,40 +326,38 @@ export default function SortableTab({
         </button>
       )}
       {!isEditing && !isPinned && (
-        <TabCloseTooltip>
-          <button
-            className={`relative z-10 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-              isActive
-                ? 'text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:text-foreground focus-visible:bg-muted'
-                : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted focus-visible:!text-foreground focus-visible:!bg-muted'
-            }`}
-            // Why: stable accessible name lets E2E drive the real close path instead of calling the store.
-            aria-label={translate(
-              'auto.components.tab.bar.SortableTab.6df69d9388',
-              'Close tab {{value0}}',
-              { value0: tabTitle }
-            )}
-            type="button"
-            data-tab-close-button="true"
-            onPointerDown={(e) => {
-              if (e.button === 0) {
-                e.stopPropagation()
-              }
-            }}
-            onMouseDown={(e) => {
-              if (e.button === 0) {
-                e.stopPropagation()
-              }
-            }}
-            onClick={(e) => {
-              e.preventDefault()
+        <button
+          className={`relative z-10 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
+            isActive
+              ? 'text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:text-foreground focus-visible:bg-muted'
+              : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted focus-visible:!text-foreground focus-visible:!bg-muted'
+          }`}
+          // Why: stable accessible name lets E2E drive the real close path instead of calling the store.
+          aria-label={translate(
+            'auto.components.tab.bar.SortableTab.6df69d9388',
+            'Close tab {{value0}}',
+            { value0: tabTitle }
+          )}
+          type="button"
+          data-tab-close-button="true"
+          onPointerDown={(e) => {
+            if (e.button === 0) {
               e.stopPropagation()
-              onClose(tab.id)
-            }}
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </TabCloseTooltip>
+            }
+          }}
+          onMouseDown={(e) => {
+            if (e.button === 0) {
+              e.stopPropagation()
+            }
+          }}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onClose(tab.id)
+          }}
+        >
+          <X className="w-3 h-3" />
+        </button>
       )}
     </div>
   )
@@ -420,6 +419,7 @@ export default function SortableTab({
         onCloseOthers={onCloseOthers}
         onCloseToRight={onCloseToRight}
         onCloseToLeft={onCloseToLeft}
+        onCloseSplitPane={onCloseSplitPane}
         onRenameOpen={handleRenameOpen}
         onSetTabColor={onSetTabColor}
         onTogglePin={onTogglePin}

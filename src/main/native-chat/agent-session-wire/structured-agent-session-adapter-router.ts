@@ -68,6 +68,14 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return released
   }
 
+  open: NonNullable<StructuredAgentSessionAdapter['open']> = (input) => {
+    const adapter = this.owner(input.sessionId)
+    if (!adapter.open) {
+      return Promise.reject(new Error('The provider cannot open a published child.'))
+    }
+    return adapter.open(input)
+  }
+
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
     this.owner(input.sessionId).dispatch(input)
 
@@ -124,6 +132,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 
+  heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
+    this.liveOwnerOrNull(sessionId)?.heldSends?.(sessionId)
+
   holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsLiveProviderProcess?.(sessionId, acquisitionGeneration) ??
     false
@@ -163,8 +174,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     this.owner(input.sessionId).setOption(input)
 
-  awaitOptionWritable = (sessionId: string): Promise<void> =>
-    this.liveOwnerOrNull(sessionId)?.awaitOptionWritable?.(sessionId) ?? Promise.resolve()
   startAnswered = (sessionId: string): boolean | undefined =>
     this.liveOwnerOrNull(sessionId)?.startAnswered?.(sessionId)
 

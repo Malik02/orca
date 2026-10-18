@@ -2,10 +2,13 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace-session-hydration-keys'
-import { buildValidWorktreeIdsForSessionHydration } from '../degraded-repo-worktree-validity'
+import { buildValidWorktreeIdsForSessionHydration } from '../../../../../shared/worktree/degraded-repo-worktree-validity'
 import { destroyWorkspaceWebviews } from '../browser-webview-cleanup'
 import { projectHydratedBrowserSession } from './browser-hydration-state'
 import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/restored-client-hosted-browser-host-attach'
+import { findWorkspace } from '../browser-page-records'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { recordLayoutApply } from '@/runtime/layout-apply-send'
 
 export function createBrowserHydrationActions(
   set: BrowserSliceSet,
@@ -92,6 +95,18 @@ export function createBrowserHydrationActions(
         }
         return s
       })
+      // Switch point: main records the tab's new profile.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        const tab = findWorkspace(get().browserTabsByWorktree, workspaceId)
+        if (tab) {
+          recordLayoutApply(get(), tab.worktreeId, {
+            type: 'setBrowserTabProfile',
+            browserTabId: workspaceId,
+            profileId,
+            sessionPartition: sessionPartition ?? null
+          })
+        }
+      }
     }
   }
 }

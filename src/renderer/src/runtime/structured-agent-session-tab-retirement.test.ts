@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { markStructuredAgentSessionLaunchCancelled } from '@/lib/structured-agent-session-launch-registry'
-import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-cancellation'
+import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const mocks = vi.hoisted(() => ({

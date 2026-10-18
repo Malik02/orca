@@ -4,6 +4,7 @@ import { collectRuntimeWorktreeAgentSources } from '../runtime-worktree-agent-so
 import { OrcaRuntimeWithWorktreePsDependencies } from './workspace-process-listing-dependencies'
 import { DEFAULT_WORKTREE_PS_LIMIT } from '../orca-runtime-postlude'
 import type { RuntimeWorktreePsResult } from '../../../shared/runtime-types'
+import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
 import { buildRuntimeWorktreePsSummaries } from '../runtime-worktree-ps-summaries'
 import {
   buildRuntimeWorktreeSummaryPathIndex,
@@ -42,10 +43,8 @@ import {
   structuredWorkerOpenTaskTitle,
   structuredWorkerOwesWork
 } from '../structured-worker-custody'
-import {
-  resolvedTuiAgentArgsBypassPermissions,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
+import { resolveTuiAgentLaunchEnv } from '../../../shared/tui-agent-launch-defaults'
+import { preModeChatGetsFullAccess } from '../../../shared/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { nativeChatShellEnvironmentPolicy } from '../../../shared/native-chat-shell-environment'
 import { claudeStructuredAuthPolicyForSettings } from '../../claude-accounts/claude-structured-auth-policy'
@@ -54,7 +53,7 @@ import { structuredAgentConfiguredArgs } from '../../native-chat/structured-agen
 import { claudeCliFlagSupport } from '../../claude/claude-cli-flag-support'
 import {
   runtimeHiddenHostIds,
-  runtimeHiddenRepoIds,
+  runtimeHiddenRepos,
   runtimeVisibleRepos,
   withoutHiddenHosts
 } from '../runtime-visible-catalog'
@@ -68,29 +67,12 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
-    const resolvedWorktreeSnapshot = await this.listResolvedWorktreeSnapshot()
-    const visibilitySettings = this.store?.getSettings()
-    const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
-      resolvedWorktreeSnapshot.worktrees,
-      sourceDefaultsSupported,
-      visibilitySettings
+    const { worktrees: resolvedWorktrees, platformByRepoId } = this.visibleResolvedWorktreeSnapshot(
+      await this.listResolvedWorktreeSnapshot(),
+      sourceDefaultsSupported
     )
-    const hiddenRepoIds = runtimeHiddenRepoIds(this.store)
-    const resolvedWorktrees = resolvedWorktreeSnapshot.worktrees.filter(
-      (worktree) =>
-        !hiddenRepoIds.has(worktree.repoId) &&
-        this.isRuntimeWorktreeVisible(
-          worktree,
-          visibilitySourceMatchersByRepoId.get(worktree.repoId),
-          sourceDefaultsSupported,
-          visibilitySettings
-        )
-    )
-    // Why: worktree.ps backs the mobile sidebar, so it must use the same
-    // host-owned imported-worktree visibility gate as worktree.list/desktop.
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
     const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
-    const platformByRepoId = resolvedWorktreeSnapshot.platformByRepoId
     const summaries = buildRuntimeWorktreePsSummaries({
       store: this.store,
       resolvedWorktrees,
@@ -153,6 +135,34 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       limit,
       withoutHiddenHosts(this.listKnownExecutionHostIds(), runtimeHiddenHostIds(this.store))
     )
+  }
+
+  /** A resolved listing as clients see it: no hidden repo, and imported worktrees only where the
+   *  desktop shows them, through the same visibility gate as worktree.list. */
+  protected visibleResolvedWorktreeSnapshot(
+    snapshot: ResolvedWorktreeSnapshot,
+    sourceDefaultsSupported = true
+  ): ResolvedWorktreeSnapshot {
+    const visibilitySettings = this.store?.getSettings()
+    const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
+      snapshot.worktrees,
+      sourceDefaultsSupported,
+      visibilitySettings
+    )
+    const hiddenRepos = runtimeHiddenRepos(this.store)
+    return {
+      ...snapshot,
+      worktrees: snapshot.worktrees.filter(
+        (worktree) =>
+          !hiddenRepos.hasWorktree(worktree) &&
+          this.isRuntimeWorktreeVisible(
+            worktree,
+            visibilitySourceMatchersByRepoId.get(worktree.repoId),
+            sourceDefaultsSupported,
+            visibilitySettings
+          )
+      )
+    }
   }
 
   /** The agent's configured env, with the account a desktop that owns this host's accounts chose
@@ -252,11 +262,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
       resolveAgentFullAccess: (agent) =>
         isTuiAgent(agent) &&
-        resolvedTuiAgentArgsBypassPermissions(
-          agent,
-          this.requireStore().getSettings(),
-          process.platform
-        ),
+        preModeChatGetsFullAccess(agent, this.requireStore().getSettings(), process.platform),
       resolveAgentLaunchEnv: (agent) =>
         isTuiAgent(agent)
           ? this.structuredAgentLaunchEnv(agent, this.requireStore().getSettings())

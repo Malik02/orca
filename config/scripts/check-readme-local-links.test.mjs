@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import { findBrokenReadmeLinks, main } from './check-readme-local-links.mjs'
@@ -162,7 +163,13 @@ describe('README local link check', () => {
     const workflow = parse(readFileSync(path.join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
     const guardJob = workflow.jobs.code_paths
     const step = guardJob.steps.find((candidate) => candidate.name === 'Check README local links')
+    const runsFor = (draft) =>
+      runInNewContext(guardJob.if, {
+        github: { event_name: 'pull_request', event: { pull_request: { draft } } }
+      })
 
+    expect(runsFor(false)).toBe(true)
+    expect(runsFor(true)).toBe(false)
     expect(guardJob.needs).toBeUndefined()
     expect(step.if).toBeUndefined()
     expect(step.run).toBe('node config/scripts/check-readme-local-links.mjs')

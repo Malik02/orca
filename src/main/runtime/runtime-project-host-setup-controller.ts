@@ -21,13 +21,14 @@ import {
 } from '../../shared/execution-host'
 import { getProjectIdForProviderIdentity } from '../../shared/project-host-setup-projection'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
-import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
+import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
 import {
   SshHostNotServedError,
   sshTargetNotConnectedMessage
 } from '../providers/ssh-host-not-served-error'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { updateProjectHostSetupWithProvenKind } from '../folder-repo-git-conversion'
 import type { RuntimeStore } from './runtime-store-contract'
 import { readAllWorktreeMetaForRepo } from '../persistence/host-qualified-worktree-meta'
 import {
@@ -61,6 +62,9 @@ function assertCloneHostIsSupported(hostId: ExecutionHostId | null | undefined):
     'Cloning onto an SSH host is not supported. Clone the repository on the host, then set the project up from that existing folder.'
   )
 }
+
+export const SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE =
+  "This Orca server can't add projects on its SSH hosts. Add the SSH host on your computer to open its projects."
 
 function sshTargetNotServedError(connectionId: string): SshHostNotServedError {
   return new SshHostNotServedError(connectionId, sshTargetNotConnectedMessage(connectionId))
@@ -123,12 +127,15 @@ export class RuntimeProjectHostSetupController {
     return this.completeSetup(args, repo, !knownRepoIds.has(repo.id))
   }
 
-  /** `repo.addRemote` stays registered for older clients; this process serves no SSH target. */
+  /**
+   * `repo.addRemote` stays registered for older clients, which still offer it; this process serves
+   * no SSH target, so the refusal says where such a project can be added instead.
+   */
   addSshRepo(args: { connectionId: string }): Promise<Repo> {
     if (!this.deps.getStore()) {
       throw new Error('runtime_unavailable')
     }
-    throw sshTargetNotServedError(args.connectionId)
+    throw new SshHostNotServedError(args.connectionId, SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
   }
 
   async setupClone(args: ProjectHostSetupCloneArgs): Promise<ProjectHostSetupResult> {
@@ -142,13 +149,31 @@ export class RuntimeProjectHostSetupController {
     )
   }
 
-  updateSetup(args: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult {
+  // Why sync up front: availability and the WSL move fence refuse before any Git probe starts.
+  updateSetup(args: ProjectHostSetupUpdateArgs): Promise<ProjectHostSetupUpdateResult> {
     const store = this.deps.getStore()
-    if (!store?.updateProjectHostSetup) {
+    const updateProjectHostSetup = store?.updateProjectHostSetup?.bind(store)
+    if (!store || !updateProjectHostSetup) {
       throw new Error('runtime_unavailable')
     }
     assertWslMoveHostSetupIdWritable(store, args.setupId)
-    const result = store.updateProjectHostSetup(args)
+    return this.finishSetupUpdate(store, updateProjectHostSetup, args)
+  }
+
+  private async finishSetupUpdate(
+    store: RuntimeStore,
+    updateProjectHostSetup: NonNullable<RuntimeStore['updateProjectHostSetup']>,
+    args: ProjectHostSetupUpdateArgs
+  ): Promise<ProjectHostSetupUpdateResult> {
+    const result = await updateProjectHostSetupWithProvenKind(
+      store,
+      (setupArgs) => {
+        assertWslMoveHostSetupIdWritable(store, setupArgs.setupId)
+        return updateProjectHostSetup(setupArgs)
+      },
+      args,
+      true
+    )
     if (!result) {
       throw new Error(`Project host setup not found: ${args.setupId}`)
     }

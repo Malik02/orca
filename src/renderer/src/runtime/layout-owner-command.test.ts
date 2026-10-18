@@ -1,5 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { endLayoutFramePositions, noteLayoutFramePosition } from './layout-frame-position'
 import { sendLayoutCommandToOwner } from './layout-owner-command'
+import {
+  _resetLayoutOwnerPaneIntentsForTests,
+  isTabPaneTreeHeld
+} from './layout-owner-pane-intents'
 
 const mocks = vi.hoisted(
   (): {
@@ -13,8 +18,12 @@ const mocks = vi.hoisted(
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExplicitRuntimeEnvironmentIdForWorktree: () => mocks.ownerEnvironmentId
+vi.mock('@/lib/resolve-owner', () => ({
+  runtimeEnvironmentIdUnlessTwin: () => mocks.ownerEnvironmentId,
+  runtimeEnvironmentIdForWorkspaceOwner: () => ({
+    kind: 'resolved',
+    environmentId: mocks.ownerEnvironmentId
+  })
 }))
 
 const SPLIT = {
@@ -29,6 +38,11 @@ function handlers() {
 }
 
 describe('sendLayoutCommandToOwner', () => {
+  afterEach(() => {
+    endLayoutFramePositions()
+    _resetLayoutOwnerPaneIntentsForTests()
+  })
+
   beforeEach(() => {
     mocks.callRuntimeRpc.mockReset()
     mocks.ownerEnvironmentId = null
@@ -47,6 +61,24 @@ describe('sendLayoutCommandToOwner', () => {
     expect(on.apply).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(on.apply).toHaveBeenCalledWith({ leafId: 'leaf-minted' }))
     expect(on.asToday).not.toHaveBeenCalled()
+  })
+
+  it('shows main’s result only once the window holds the frame with main’s change', async () => {
+    noteLayoutFramePosition(4)
+    mocks.callRuntimeRpc.mockResolvedValue({
+      ok: true,
+      result: { leafId: 'leaf-minted' },
+      frameSeq: 5
+    })
+    const on = handlers()
+
+    sendLayoutCommandToOwner('worktree-1', SPLIT, on)
+    await vi.waitFor(() => expect(mocks.callRuntimeRpc).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(on.apply).not.toHaveBeenCalled()
+
+    noteLayoutFramePosition(5)
+    expect(on.apply).toHaveBeenCalledWith({ leafId: 'leaf-minted' })
   })
 
   it('changes nothing itself after a refusal', async () => {
@@ -72,16 +104,65 @@ describe('sendLayoutCommandToOwner', () => {
     [
       'main lacks the workspace',
       () => mocks.callRuntimeRpc.mockResolvedValue({ ok: false, code: 'workspace_not_found' })
-    ],
-    ['the call fails', () => mocks.callRuntimeRpc.mockRejectedValue(new Error('rpc_failed'))]
-  ])('acts as today when %s', async (_case, arrange) => {
+    ]
+  ])('refuses, logging it and drawing nothing, when %s', async (_case, arrange) => {
     arrange()
     const on = handlers()
 
     sendLayoutCommandToOwner('worktree-1', SPLIT, on)
 
-    await vi.waitFor(() => expect(on.asToday).toHaveBeenCalledOnce())
-    expect(on.refused).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(on.refused).toHaveBeenCalledOnce())
+    expect(on.asToday).not.toHaveBeenCalled()
+    expect(console.warn).toHaveBeenCalledWith(
+      '[layout-owner] splitPane refused:',
+      expect.stringMatching(/_not_found$/)
+    )
+  })
+
+  it('refuses, drawing nothing, when the call fails', async () => {
+    mocks.callRuntimeRpc.mockRejectedValue(new Error('rpc_failed'))
+    const on = handlers()
+
+    sendLayoutCommandToOwner('worktree-1', SPLIT, on)
+
+    await vi.waitFor(() => expect(on.refused).toHaveBeenCalledWith('call_failed'))
+    expect(on.asToday).not.toHaveBeenCalled()
+  })
+
+  it('keeps the tab’s drawn tree from frames until its answer, and what awaits it, has run', async () => {
+    noteLayoutFramePosition(4)
+    mocks.callRuntimeRpc.mockResolvedValue({ ok: true, result: {}, frameSeq: 5 })
+    const on = handlers()
+    const heldInCaller = Promise.withResolvers<boolean>()
+    on.apply.mockImplementation(() => {
+      void Promise.resolve()
+        .then(() => undefined)
+        .then(() => heldInCaller.resolve(isTabPaneTreeHeld('tab-1')))
+      throw new Error('handler failed')
+    })
+
+    sendLayoutCommandToOwner('worktree-1', SPLIT, on)
+    expect(isTabPaneTreeHeld('tab-1')).toBe(true)
+    await vi.waitFor(() => expect(mocks.callRuntimeRpc).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(isTabPaneTreeHeld('tab-1')).toBe(true)
+
+    noteLayoutFramePosition(5)
+    expect(on.apply).toHaveBeenCalledOnce()
+    await expect(heldInCaller.promise).resolves.toBe(true)
+    await vi.waitFor(() => expect(isTabPaneTreeHeld('tab-1')).toBe(false))
+  })
+
+  it('holds no tab for a command that changes no pane tree', async () => {
+    mocks.callRuntimeRpc.mockResolvedValue({ ok: true, result: {} })
+
+    sendLayoutCommandToOwner(
+      'worktree-1',
+      { type: 'renameTab', tabId: 'tab-1', kind: 'custom', title: 'logs' },
+      handlers()
+    )
+
+    expect(isTabPaneTreeHeld('tab-1')).toBe(false)
   })
 
   it('does not run the fallback when the caller’s own handler throws', async () => {
@@ -106,13 +187,14 @@ describe('sendLayoutCommandToOwner', () => {
     await vi.waitFor(() => expect(on.refused).toHaveBeenCalledWith('last_pane'))
   })
 
-  it('acts as today when main says a paired server holds the tab', async () => {
+  it('refuses a workspace main routes to no host of its own, drawing nothing', async () => {
     mocks.callRuntimeRpc.mockResolvedValue({ ok: false, code: 'host_not_owned' })
     const on = handlers()
 
     expect(sendLayoutCommandToOwner('worktree-1', SPLIT, on)).toBe(true)
 
-    await vi.waitFor(() => expect(on.asToday).toHaveBeenCalled())
+    await vi.waitFor(() => expect(on.refused).toHaveBeenCalledWith('host_not_owned'))
+    expect(on.asToday).not.toHaveBeenCalled()
     expect(on.apply).not.toHaveBeenCalled()
   })
 

@@ -8,6 +8,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
 import { createProcessHostDevRebuildPlugin } from './config/build-plugins/process-host-dev-rebuild'
+import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cache-retention'
 import { MAIN_BUILD_ENTRY_POINTS } from './config/build-plugins/main-build-entry-points'
 import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
 import { resolveBuildSourceCommit } from './config/scripts/build-source-commit.mjs'
@@ -19,6 +20,7 @@ const BUNDLED_MAIN_DEPENDENCIES = new Set([
   '@xterm/addon-serialize',
   'tldts',
   'smol-toml',
+  'fflate',
   // Why: Windows NSIS deploys app.asar before external resources; bootstrap must
   // not race the later resources/node_modules copy.
   'zod'
@@ -53,24 +55,20 @@ const ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL =
     ? JSON.stringify(orcaDiagnosticsTokenUrl)
     : 'null'
 
-const layoutOwnerBuild: {
-  LAYOUT_OWNER_MARKER_FILENAME: string
-  LAYOUT_OWNER_MARKER_TEXT: string
-  isLayoutOwnerBuild: () => boolean
-  layoutOwnerDefine: () => string
-} = createRequire(import.meta.url)('./config/layout-owner-build.cjs')
-const ORCA_LAYOUT_OWNER_LITERAL = layoutOwnerBuild.layoutOwnerDefine()
+const darkBuildSwitches: {
+  darkBuildDefines: () => Record<string, string>
+  darkBuildMarkers: () => { fileName: string; text: string }[]
+} = createRequire(import.meta.url)('./config/dark-build-switches.cjs')
+const DARK_BUILD_DEFINES = darkBuildSwitches.darkBuildDefines()
 
-/** Marks a dark layout-owner main build so packaging refuses it. */
-function createLayoutOwnerMarkerPlugin(): Plugin {
+/** Marks a dark switched-on main build so packaging refuses it. */
+function createDarkBuildMarkerPlugin(): Plugin {
   return {
-    name: 'orca-layout-owner-marker',
+    name: 'orca-dark-build-marker',
     generateBundle() {
-      this.emitFile({
-        type: 'asset',
-        fileName: layoutOwnerBuild.LAYOUT_OWNER_MARKER_FILENAME,
-        source: layoutOwnerBuild.LAYOUT_OWNER_MARKER_TEXT
-      })
+      for (const marker of darkBuildSwitches.darkBuildMarkers()) {
+        this.emitFile({ type: 'asset', fileName: marker.fileName, source: marker.text })
+      }
     }
   }
 }
@@ -94,10 +92,8 @@ function createStartupDiagnosticsBanner(chunkName: string): string {
       return '"<unserializable>"'
     }
   }
-  let closeSync
   let diagnosticFileDescriptor
-  let openSync
-  let writeSync
+  let closeSync, openSync, writeSync
   try {
     const fs = require('node:fs')
     closeSync = fs.closeSync
@@ -233,6 +229,12 @@ export const electronViteConfig: UserConfig = {
       // bundle never references maps that packaging strips out. Release CI
       // uploads them so minified crash traces stay decodable.
       sourcemap: 'hidden',
+      // PR fixtures discard maps; official releases must always retain them.
+      ...(process.env.ORCA_CI_MAIN_SOURCEMAPS === '0' &&
+      orcaBuildIdentity !== 'stable' &&
+      orcaBuildIdentity !== 'rc'
+        ? { sourcemap: false }
+        : {}),
       // Why: daemon-entry.js is asar-unpacked so child_process.fork() can
       // execute it from disk. Node's module resolution from the unpacked
       // directory cannot reach into app.asar; startup-critical pure JS must
@@ -255,7 +257,7 @@ export const electronViteConfig: UserConfig = {
           createMainBootstrapPlugin(),
           createPlainNodeEntryGuardPlugin(),
           createProcessHostDevRebuildPlugin(),
-          ...(layoutOwnerBuild.isLayoutOwnerBuild() ? [createLayoutOwnerMarkerPlugin()] : [])
+          createDarkBuildMarkerPlugin()
         ]
       }
     },
@@ -266,7 +268,7 @@ export const electronViteConfig: UserConfig = {
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
       ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL,
       ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL,
-      ORCA_LAYOUT_OWNER: ORCA_LAYOUT_OWNER_LITERAL
+      ...DARK_BUILD_DEFINES
     },
     // Why: @xterm/headless declares "exports": null in package.json, which
     // prevents Vite's default resolver from finding the CJS entry. Point
@@ -288,9 +290,11 @@ export const electronViteConfig: UserConfig = {
     }
   },
   renderer: {
+    // Shared node_modules installs must not share dependency optimization state across worktrees.
+    cacheDir: resolve('.cache/vite/renderer'),
     define: {
       ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL,
-      ORCA_LAYOUT_OWNER: ORCA_LAYOUT_OWNER_LITERAL
+      ...DARK_BUILD_DEFINES
     },
     resolve: {
       alias: {
@@ -299,12 +303,18 @@ export const electronViteConfig: UserConfig = {
         '@': resolve('src/renderer/src')
       }
     },
-    plugins: [react(), tailwindcss(), createPdfjsViewerAssetsPlugin()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      createPdfjsViewerAssetsPlugin(),
+      createViteCacheRetentionPlugin()
+    ],
     worker: {
       format: 'es'
     },
     build: {
       manifest: true,
+      reportCompressedSize: false,
       modulePreload: { polyfill: true },
       minify: 'oxc',
       target: 'es2020',
@@ -320,6 +330,7 @@ export const electronViteConfig: UserConfig = {
         input: {
           index: resolve('src/renderer/index.html'),
           popout: resolve('src/renderer/popout.html'),
+          space: resolve('src/renderer/space.html'),
           web: resolve('src/renderer/web-index.html')
         }
       }
@@ -327,4 +338,23 @@ export const electronViteConfig: UserConfig = {
   }
 }
 
-export default defineConfig(electronViteConfig)
+export default defineConfig(({ command }) => {
+  if (command !== 'serve') {
+    return electronViteConfig
+  }
+  // Electron Vite also uses Vite's build command for the development main process.
+  return {
+    ...electronViteConfig,
+    main: {
+      ...electronViteConfig.main,
+      build: {
+        ...electronViteConfig.main?.build,
+        minify: false,
+        sourcemap:
+          process.env.ORCA_DEV_MAIN_SOURCEMAPS === '0'
+            ? false
+            : electronViteConfig.main?.build?.sourcemap
+      }
+    }
+  }
+})

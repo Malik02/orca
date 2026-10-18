@@ -16,7 +16,6 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
-import { cliWriterExecutionMatcher } from '../agent-hooks/server/cli-writer-observation'
 import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
 import { getDaemonProvider } from '../daemon/daemon-provider-state'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
@@ -25,7 +24,7 @@ import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
 import { fingerprintOrchestrationPeer } from '../runtime/orchestration/environment-transport'
-import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { mainProcessState as state } from './main-process-state'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
@@ -43,6 +42,8 @@ import {
 } from '../runtime/agent-status-observed-pane-identity'
 import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { repairDuplicatePtyPanesOnStart } from '../runtime/moved-pane-owner-rekey'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -147,12 +148,15 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
   state.runtime = runtime
+  // Switch point: main's load repair is written only now that a runtime can move pane owners.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    void repairDuplicatePtyPanesOnStart(store, runtime)
+  }
+  runtime.sidebarFacts?.attachSidebarAgentStatusStore(agentHookServer)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)
   )
-  agentHookServer.setCliWriterExecutionMatcher(
-    cliWriterExecutionMatcher(observedPaneIdentities, runtime)
-  )
+  agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
   // Why before anything can attach: a client host that reattaches to a restarted runtime is only
   // handed its pages back if the runtime found them first.
   runtime.rehydrateClientHostedBrowserPages()

@@ -291,6 +291,32 @@ describe('CLI identity resume through the existing launch owner', () => {
     expect(tabs()).toHaveLength(1)
   })
 
+  it('still opens an eager History joiner after the terminal closes before create', async () => {
+    const capability = deferred<boolean>()
+    mocks.createCapability.mockReturnValue(capability.promise)
+    const running = runCliChatResume(SOURCE)
+    await vi.waitFor(() => expect(mocks.createCapability).toHaveBeenCalledOnce())
+    const eager = beginStructuredAgentSessionProvisionalLaunch({
+      hooks: {},
+      plan: adoptAgentSessionLaunchVerdict({
+        route: 'structured-native-chat',
+        requestId: newAgentLaunchRequestId(),
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        executionHostId: 'local',
+        resumeFrom: { providerSessionId: 'provider-1' }
+      })
+    })
+    mocks.source = null
+    useAppStore.setState({})
+    capability.resolve(true)
+    await Promise.all([running, eager?.settlement])
+    expect(mocks.call).toHaveBeenCalledOnce()
+    expect(mocks.call.mock.calls[0][2].resumeFrom).toEqual({ providerSessionId: 'provider-1' })
+    expect(tabs()).toHaveLength(1)
+    expect(mocks.toast).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['reply', 'B', 'B E S R', 'B E S D R'],
     ['inventory', 'E', 'S B R E', 'S B D R E'],

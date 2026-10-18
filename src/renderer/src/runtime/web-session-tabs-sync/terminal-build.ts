@@ -1,6 +1,6 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import { normalizeTerminalLayoutPtyOwnership } from '@/components/terminal-pane/terminal-layout-pty-ownership'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/terminal-layout-pty-ownership'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/pane-agent-owner'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-title-owner'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from '../runtime-terminal-stream'
@@ -185,7 +185,12 @@ export function buildMirroredTerminalTabs(
         ...(existing?.recovery ? { recovery: existing.recovery } : {}),
         ...(quickCommandLabel ? { quickCommandLabel } : {}),
         ...(startupCwd ? { startupCwd } : {}),
-        customTitle: existing?.customTitle ?? null,
+        // Why: the host's manual name is the one the CLI and phones see; it must outrank this
+        // client's saved-session title (#29975). Older hosts omit it, so keep ours then.
+        customTitle:
+          activeSurface.customTitle !== undefined
+            ? activeSurface.customTitle
+            : (existing?.customTitle ?? null),
         color,
         isPinned,
         ...(viewMode ? { viewMode } : {}),

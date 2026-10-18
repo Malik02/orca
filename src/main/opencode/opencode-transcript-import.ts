@@ -4,12 +4,15 @@ import { dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { getManagedDataAccountService } from '../managed-data-accounts/service'
-import type { StructuredAgentTranscriptImport } from '../native-chat/structured-agent-cli-conversations'
+import {
+  absoluteConversationStore,
+  type StructuredAgentTranscriptImport
+} from '../native-chat/structured-agent-cli-conversations'
 import { resolveOpenCodeDatabasePath } from './opencode-data-directory'
 import { environmentForStructuredOpenCodeAccountHome } from './opencode-structured-account-home'
 
 function accountDatabase(
-  accountHome: Parameters<StructuredAgentTranscriptImport['findTranscript']>[0]['accountHome'],
+  accountHome: Parameters<StructuredAgentTranscriptImport['conversationStore']>[0]['accountHome'],
   launchEnv: NodeJS.ProcessEnv
 ) {
   if (isLegacyAgentSessionAccountHome(accountHome)) {
@@ -19,18 +22,18 @@ function accountDatabase(
     managedAccounts: getManagedDataAccountService(),
     baseEnvironment: launchEnv
   })
-  return resolveOpenCodeDatabasePath(
-    env,
-    (process.platform === 'win32' ? env.USERPROFILE : env.HOME) || homedir()
+  return absoluteConversationStore(
+    resolveOpenCodeDatabasePath(
+      env,
+      (process.platform === 'win32' ? env.USERPROFILE : env.HOME) || homedir()
+    )
   )
 }
 
 export const OPENCODE_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
-  admitTranscriptPath: async ({ accountHome, transcriptPath, launchEnv }) => {
-    const dbPath = accountDatabase(accountHome, launchEnv)
-    if (!dbPath) {
-      return null
-    }
+  // The account's store is its exact database, which is the only one its chat can load from.
+  conversationStore: ({ accountHome, launchEnv }) => accountDatabase(accountHome, launchEnv),
+  admitTranscriptPath: async ({ store: dbPath, transcriptPath }) => {
     const [expected, actual] = await Promise.all([
       admitTranscriptPath(dirname(dbPath), dbPath),
       admitTranscriptPath(dirname(dbPath), transcriptPath)
@@ -42,12 +45,7 @@ export const OPENCODE_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
     selectedAccountHome,
     { kind: 'opencode', locator: { kind: 'unmanaged' } }
   ],
-  // The database the account's OpenCode opens, which is the only one its chat can load from.
-  findTranscript: async ({ providerSessionId, accountHome, launchEnv }) => {
-    const dbPath = accountDatabase(accountHome, launchEnv)
-    if (!dbPath) {
-      return null
-    }
+  findTranscript: async ({ providerSessionId, store: dbPath }) => {
     try {
       if (!(await stat(dbPath)).isFile()) {
         return null

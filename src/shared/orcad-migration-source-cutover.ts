@@ -4,10 +4,12 @@
  */
 import { z } from 'zod'
 import {
+  MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES,
+  MAX_ORCAD_MIGRATION_PROJECT_GROUPS,
   MAX_ORCAD_MIGRATION_REPOSITORIES,
-  parseOrcadMigrationManifest,
-  type OrcadMigrationManifest
-} from './orcad-migration-manifest'
+  parseOrcadMigrationManifest
+} from './orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from './orcad-migration-manifest'
 import { isOrcadMigrationLocalWslSource } from './orcad-migration-source-kind'
 
 export const ORCAD_MIGRATION_SOURCE_CUTOVER_VERSION = 1
@@ -52,6 +54,16 @@ const CutoverRecordSchema = z.object({
   linkedRepositoryIds: z
     .array(z.string().min(1).max(1_024))
     .max(MAX_ORCAD_MIGRATION_REPOSITORIES)
+    .optional(),
+  // Source project groups the server already holds, or only linked projects used: its record wins.
+  linkedProjectGroupIds: z
+    .array(z.string().min(1).max(1_024))
+    .max(MAX_ORCAD_MIGRATION_PROJECT_GROUPS)
+    .optional(),
+  // Source folder workspaces the server already holds under the same id and folder (#27285).
+  linkedFolderWorkspaceIds: z
+    .array(z.string().min(1).max(1_024))
+    .max(MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES)
     .optional(),
   manifest: z.unknown()
 })

@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
@@ -237,6 +238,15 @@ describe('root directory guard', () => {
       (step) => step.name === 'Reject new root-level files and folders'
     )
 
+    // Only draft PRs skip the guard; verify skips with it, so no draft reports a result.
+    const runsFor = (expression, draft) =>
+      runInNewContext(expression.replace(/^\$\{\{(.*)\}\}$/s, '$1'), {
+        github: { event_name: 'pull_request', event: { pull_request: { draft } } },
+        cancelled: () => false
+      })
+    expect(runsFor(guardJob.if, false)).toBe(true)
+    expect(runsFor(guardJob.if, true)).toBe(false)
+    expect(runsFor(workflow.jobs.verify.if, true)).toBe(false)
     expect(guardStep.if).toBeUndefined()
     // Why >= 2 rather than 0: the guard compares the merge commit's first parent against the
     // merged tree, so it needs both parents present but no history beyond them. Depth 1 would

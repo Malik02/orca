@@ -26,6 +26,7 @@ import {
   neverThrowingStructuredAgentSessionLogger
 } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { StructuredAgentSessionDeliveryOrder } from '../native-chat/agent-session-wire/structured-agent-session-delivery-order'
 import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
 import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
 import { createStructuredAgentSessionLifecycleDelivery } from './structured-agent-session-lifecycle-delivery'
@@ -40,9 +41,6 @@ const SESSION = 'session-1'
 function rejectingHost(error: Error) {
   return {
     settleLateDispatch: vi.fn(async () => {
-      throw error
-    }),
-    releaseUnansweredDispatches: vi.fn(async () => {
       throw error
     })
   }
@@ -75,25 +73,6 @@ describe('failures the desktop host used to drop', () => {
     )
   })
 
-  it('logs releasing the sends an idle provider never answered when that fails', async () => {
-    const log = recordingStructuredAgentSessionLogger()
-    const error = new Error('release write failed')
-    const followUps = createStructuredAgentSessionDispatchFollowUps({
-      host: () => rejectingHost(error),
-      logger: log.logger
-    })
-
-    followUps.releaseUnansweredDispatches({ sessionId: SESSION })
-
-    await vi.waitFor(() =>
-      expect(log.entries).toEqual([
-        expect.objectContaining({
-          fields: { scope: 'unanswered-dispatch', sessionId: SESSION, error }
-        })
-      ])
-    )
-  })
-
   it('logs a provider start or exit the host could not take', async () => {
     const log = recordingStructuredAgentSessionLogger()
     const error = new Error('host refused the event')
@@ -110,9 +89,7 @@ describe('failures the desktop host used to drop', () => {
       sessionId: SESSION,
       fence: 1,
       acquisitionGeneration: 'generation-1',
-      reportedOptions: { model: 'gpt-5' },
-      restoreSkippedOptions: [],
-      optionRevision: 0
+      reportedOptions: { model: 'gpt-5' }
     })
     lifecycle.deliver({
       type: 'ended',
@@ -173,6 +150,8 @@ describe('host collaborators log with their own scope', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a step that rejects at its first serialize reads only these members.
       {
         serialize: rejectingSerialize,
+        sessions: new Map(),
+        deliveryOrder: new StructuredAgentSessionDeliveryOrder(),
         trackStart: <T>(start: Promise<T>) => start,
         logger: log.logger
       } as unknown as StructuredAgentSessionDeliveryLoopDeps

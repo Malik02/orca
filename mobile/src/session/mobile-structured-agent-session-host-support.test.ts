@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
@@ -19,11 +22,13 @@ describe('structuredAgentSessionHostSupport', () => {
       questionAnswers: false,
       queuedMessages: false,
       queuedCommands: false,
+      queuedMessageEdit: false,
       quietRepeatedStop: false,
       statusFeed: false,
       sendOptions: false,
       conversationStop: false,
-      permissionModes: false
+      permissionModes: false,
+      phoneAttachments: false
     }
     expect(structuredAgentSessionHostSupport([])).toEqual(none)
     expect(
@@ -39,6 +44,9 @@ describe('structuredAgentSessionHostSupport', () => {
       structuredAgentSessionHostSupport([AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY])
     ).toEqual({ ...none, queuedCommands: true })
     expect(
+      structuredAgentSessionHostSupport([AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY])
+    ).toEqual({ ...none, queuedMessageEdit: true })
+    expect(
       structuredAgentSessionHostSupport([AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY])
     ).toEqual({ ...none, quietRepeatedStop: true })
     expect(
@@ -53,5 +61,12 @@ describe('structuredAgentSessionHostSupport', () => {
     expect(
       structuredAgentSessionHostSupport([AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY])
     ).toEqual({ ...none, permissionModes: true })
+    expect(
+      structuredAgentSessionHostSupport([AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY])
+    ).toEqual({ ...none, phoneAttachments: true })
+    // A host with the store but from before phones could upload into it offers them nothing.
+    expect(
+      structuredAgentSessionHostSupport([AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY])
+    ).toEqual(none)
   })
 })

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-cancellation'
+import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
@@ -38,7 +38,7 @@ import {
   beginStructuredAgentSessionAuthoritativeInventory,
   resetStructuredAgentLaunchCancellationForTests,
   startStructuredAgentLaunchCancellationCleanup
-} from '@/lib/structured-agent-session-launch-cancellation'
+} from '@/lib/launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import {
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord

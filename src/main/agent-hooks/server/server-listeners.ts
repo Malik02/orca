@@ -1,4 +1,4 @@
-import type { CliWriterExecutionMatches } from './cli-writer-observation'
+import { cliWriterExecutionMatcher, type CliWriterExecutionMatches } from './cli-writer-observation'
 import { isTmuxInnerSubject } from '../../../shared/tmux-agent-hook-owner'
 import type {
   AgentStatusClearIpcPayload,
@@ -29,8 +29,8 @@ const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 export abstract class AgentHookServerListeners extends AgentHookServerState {
   protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
 
-  setCliWriterExecutionMatcher(matcher: CliWriterExecutionMatches): void {
-    this.cliWriterExecutionMatches = matcher
+  setCliWriterExecutionMatcher(...args: Parameters<typeof cliWriterExecutionMatcher>): void {
+    this.cliWriterExecutionMatches = cliWriterExecutionMatcher(...args)
   }
 
   setStartupPromptClaimListener(

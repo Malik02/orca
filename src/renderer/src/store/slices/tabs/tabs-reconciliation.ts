@@ -157,7 +157,11 @@ export function projectWorktreeTabModelReconciliation(
   })
   const prunedGroups =
     validTabs.length > 0
-      ? nextGroupsWithEmpty.filter((group) => group.tabOrder.length > 0)
+      ? nextGroupsWithEmpty.filter(
+          // Preserve intentional empty panes; only collapse groups emptied by stale-tab cleanup.
+          (group, index) =>
+            group.tabOrder.length > 0 || reconciledGroups[index].tabOrder.length === 0
+        )
       : nextGroupsWithEmpty
   const groupsChanged =
     prunedGroups.length !== groups.length ||

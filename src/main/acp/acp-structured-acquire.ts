@@ -1,11 +1,11 @@
 // Making a reservation real for an ACP agent: open its connection (which spawns and owns the
 // process), record it before any handshake, initialize with the client's file system and terminals
-// off, then reattach the session this chat proved with `session/load` (`session/resume` only for an
-// agent that cannot load) or start a new one. A saved session the agent cannot reopen is replaced
-// by a new one, with a warning row that any later start writes if this attach never did. The
-// journal already holds a reattached chat, so whatever the agent sends while it reattaches is not
-// written, except context usage. The handshake has no time bound: the acquire's abort signal
-// (Close, Stop, quit) stops it at any point.
+// off, then reattach the session this chat proved with `session/load` (`session/resume` for an
+// agent that cannot load or prefers it) or start a new one. A saved session the agent cannot reopen
+// is replaced by a new one, with a warning row that any later start writes if this attach never
+// did. The journal already holds a reattached chat, so whatever the agent sends while it reattaches
+// is not written, except context usage. The handshake has no time bound: the acquire's abort
+// signal (Close, Stop, quit) stops it at any point.
 
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import {
@@ -63,6 +63,7 @@ export async function acquireAcpStructuredSession(input: {
 }): Promise<{ acquisition: AgentSessionAcquisition; session: AcpStructuredSession }> {
   const { acquire, deps, generation } = input
   const { spec } = deps
+  const agentName = acpAgentName(spec.agent)
   const sessionId = acquire.identity.sessionId
   const now = deps.now ?? Date.now
   const events = acquire.events
@@ -72,9 +73,7 @@ export async function acquireAcpStructuredSession(input: {
   }
   const closedBeforeSpawn = () => {
     if (input.abandoned()) {
-      throw new AgentSessionPreSpawnError(
-        new Error(`${acpAgentName(spec.agent)} was closed before it started`)
-      )
+      throw new AgentSessionPreSpawnError(new Error(`${agentName} was closed before it started`))
     }
   }
   closedBeforeSpawn()
@@ -119,14 +118,16 @@ export async function acquireAcpStructuredSession(input: {
     {
       clientInfo: { name: 'orca', version: '1' },
       ...(acquire.onOutput ? { onOutput: acquire.onOutput } : {}),
+      ...(spec.signIn ? { signIn: spec.signIn } : {}),
       onPermission: (request, context) => {
         if (!session?.turns.acceptsRequests) {
           // No prompt of Orca's runs (a turn the agent began itself included), or a Stop or steer
           // is cutting it short: nobody is there to ask.
           return { outcome: { outcome: 'cancelled' } }
         }
-        // A request the dialect claims is a question for the person, which full access never answers.
-        if (launch.fullAccess && !spec.dialect.request?.('session/request_permission', request)) {
+        // Full access never answers a dialect's question, nor an agent that enforces the mode itself.
+        const claimed = spec.dialect.request?.('session/request_permission', request)
+        if (launch.fullAccess && !spec.permissionModeConfig && !claimed) {
           // Full access: Orca answers yes for the person, as the agent's own bypass flag would.
           const allow = request.options.find((option) => option.kind === 'allow_once')
           if (allow) {
@@ -184,7 +185,7 @@ export async function acquireAcpStructuredSession(input: {
       sink,
       sessionId,
       agent: spec.agent,
-      agentName: acpAgentName(spec.agent),
+      agentName,
       generation,
       providerSessionId,
       dialect: spec.dialect,
@@ -213,7 +214,6 @@ export async function acquireAcpStructuredSession(input: {
     )
   }
   await identity.onSpawned(pid)
-  const agentName = acpAgentName(spec.agent)
   try {
     const initialized = await connection.initialize()
     // Chosen here, on the machine Grok runs on, from the environment it was launched with.
@@ -221,7 +221,7 @@ export async function acquireAcpStructuredSession(input: {
       advertised: (initialized.authMethods ?? []).map((method) => method.id),
       env: launch.env
     })
-    const auth = authMethodId === undefined ? {} : { authMethodId }
+    const setup = { authMethodId, resumePreference: spec.resumePreference }
     const resume = launch.resume
     let started: Awaited<ReturnType<AcpStructuredConnection['start']>> | null = null
     let liveLane: AcpStructuredLane | null = null
@@ -234,7 +234,7 @@ export async function acquireAcpStructuredSession(input: {
           cwd: launch.cwd,
           mcpServers: [],
           sessionId: resume.sessionId,
-          ...auth
+          ...setup
         })
         slot.reattaching = false
         attaching.translator.finishLoad()
@@ -251,13 +251,25 @@ export async function acquireAcpStructuredSession(input: {
     if (!started || !liveLane) {
       liveLane?.dispose()
       slot.lane = null
-      started = await connection.start({ cwd: launch.cwd, mcpServers: [], ...auth })
+      started = await connection.start({ cwd: launch.cwd, mcpServers: [], ...setup })
       liveLane = makeLane(started.sessionId)
     }
     childStops = await probeAcpChildStops(connection, spec.dialect)
     options.adoptSession(started.response, started.kind === 'new' ? 'new' : 'loaded')
     liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
     const restoreSkipped = await restoreAcpSessionOptions(connection, options, acquire.options)
+    const mode = spec.permissionModeConfig
+    if (mode) {
+      // Unlike a saved pick, a refusal fails the start: the session would run another posture.
+      // A start the host names no mode for asks, never more access than the chat chose.
+      const requested = mode.values[acquire.permissionMode ?? 'ask'] ?? mode.values.ask
+      const configId = options.modeConfigId()
+      const { configOptions } = await connection.setConfigOption(configId, requested)
+      if (configOptions.find((option) => option.id === configId)?.currentValue !== requested) {
+        throw new Error('Permission mode could not be confirmed')
+      }
+      options.adoptConfigOptions(configOptions)
+    }
     const process = await identity.read(pid)
     const link: AgentSessionProviderHandleLink = {
       linkId:
@@ -269,6 +281,7 @@ export async function acquireAcpStructuredSession(input: {
       ...takeover
     }
     session = {
+      events,
       sessionId,
       fence: acquire.fence,
       acquisitionGeneration: generation,
@@ -293,16 +306,13 @@ export async function acquireAcpStructuredSession(input: {
       exitObservedAt: null
     }
     const reading = liveLane
-    const unbind = events?.bindReadingControl?.({
+    session.unbindReadingControl = events?.bindReadingControl?.({
       pauseReading: () => connection.pauseReading(),
       resumeReading: () => {
         connection.resumeReading()
         reading.retry()
       }
     })
-    if (unbind) {
-      session.unbindReadingControl = unbind
-    }
     if (connection.exited || connection.closed) {
       throw new Error(connection.stderrTail() || `${spec.command} exited while starting`)
     }

@@ -11,22 +11,16 @@ function sessionsRoot(accountHomePath: string, launchEnv: NodeJS.ProcessEnv) {
 }
 
 export const OMP_TRANSCRIPT_IMPORT = directoryTranscriptImport({
-  transcriptRoot: ({ accountHomePath, launchEnv }) => sessionsRoot(accountHomePath, launchEnv),
+  conversationStore: ({ accountHomePath, launchEnv }) => sessionsRoot(accountHomePath, launchEnv),
   accountHomeCandidates: ({ selectedAccountHomePath }) => [selectedAccountHomePath],
   // Where OMP itself keeps the account's sessions, which is not always under it (XDG_DATA_HOME).
-  findTranscript: async ({ providerSessionId, accountHomePath, launchEnv, workspaceCwd, strictErrors }) => {
-    const homeDir =
-      (process.platform === 'win32' ? launchEnv.USERPROFILE : launchEnv.HOME) || homedir()
-    const sessionsDir = sessionsRoot(accountHomePath, launchEnv)
-    return sessionsDir
-      ? findOmpSessionByCwd({
-          sessionsDir,
-          sessionId: providerSessionId,
-          cwd: workspaceCwd,
-          homeDir,
-          env: launchEnv,
-          strictErrors
-        })
-      : null
-  }
+  findTranscript: ({ providerSessionId, store, launchEnv, workspaceCwd, strictErrors }) =>
+    findOmpSessionByCwd({
+      sessionsDir: store,
+      sessionId: providerSessionId,
+      cwd: workspaceCwd,
+      homeDir: (process.platform === 'win32' ? launchEnv.USERPROFILE : launchEnv.HOME) || homedir(),
+      env: launchEnv,
+      strictErrors
+    })
 })

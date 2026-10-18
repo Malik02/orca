@@ -108,7 +108,8 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       expect(transport.connect).toHaveBeenCalledTimes(1)
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+          // The record holds no launch recipe, so the resume adds no permission bypass.
+          command: "codex 'resume' 'codex-session-1'",
           launchAgent: 'codex',
           env: expect.objectContaining({
             ORCA_PANE_KEY: paneKey,
@@ -125,8 +126,8 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
         paneKey,
         {
-          agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
-          agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+          agentCommand: 'codex',
+          agentArgs: '',
           agentEnv: {}
         },
         {
@@ -272,11 +273,12 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
       const pane = createPane(2)
       const manager = createManager(2)
+      const isVisibleRef = { current: true }
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         restoredPtyIdByLeafId: {},
         consumeSuppressedPtyExit: vi.fn(() => true),
-        isVisibleRef: { current: false }
+        isVisibleRef
       })
 
       const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
@@ -285,6 +287,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       await flushAsyncTicks(10)
 
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
+      isVisibleRef.current = false
 
       // Hibernate the pane, then reveal it so the wake respawns the recorded session.
       // Hibernation writes the sleeping record the first spawn consumed.
@@ -294,6 +297,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         | undefined
       onPtyExit?.('fresh-pty')
       await flushAsyncTicks(10)
+      isVisibleRef.current = true
       binding.noteVisibilityResume()
       await flushAsyncTicks(10)
 

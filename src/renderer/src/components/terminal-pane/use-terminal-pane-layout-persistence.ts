@@ -10,7 +10,7 @@ import { clearWebRuntimeTerminalBuffer } from '@/runtime/web-runtime-terminal-bu
 import {
   isSyntheticSinglePaneTitle,
   sanitizeTerminalLayoutPaneTitles
-} from '@/lib/terminal-pane-title-sanitization'
+} from '../../../../shared/terminal-pane-title-sanitization'
 import type { TerminalPaneStartupController } from './use-terminal-pane-startup-actions'
 import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -130,7 +130,16 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
         (ptyId) => typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
       )
       if (hasRemotePane) {
-        remotePaneLayoutPusherRef.current?.push({ worktreeId, tabId, layout, intent })
+        // Why: a host keeps its titles when the field is absent, so clearing the last one sends {}.
+        const clearedEveryTitle =
+          !layout.titlesByLeafId &&
+          [...currentLeafIds].some((leafId) => removedTitleLeafIds.has(leafId))
+        remotePaneLayoutPusherRef.current?.push({
+          worktreeId,
+          tabId,
+          layout: clearedEveryTitle ? { ...layout, titlesByLeafId: {} } : layout,
+          intent
+        })
       }
       for (const leafId of currentLeafIds) {
         clearedScrollbackLeafIds.delete(leafId)

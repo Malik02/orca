@@ -10,7 +10,7 @@ import {
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 
 const CODEX_TRANSCRIPT_IMPORT = directoryTranscriptImport({
-  transcriptRoot: ({ accountHomePath }) => join(accountHomePath, 'sessions'),
+  conversationStore: ({ accountHomePath }) => join(accountHomePath, 'sessions'),
   accountHomeCandidates: ({ settings, selectedAccountHomePath }) => [
     selectedAccountHomePath,
     ...(settings.codexManagedAccounts ?? []).map((account) => account.managedHomePath),
@@ -18,11 +18,8 @@ const CODEX_TRANSCRIPT_IMPORT = directoryTranscriptImport({
     getOrcaManagedCodexHomePath(),
     getSystemCodexHomePath()
   ],
-  findTranscript: ({ providerSessionId, accountHomePath, strictErrors }) =>
-    resolveSessionFilePath('codex', providerSessionId, {
-      codexSessionsDirs: [join(accountHomePath, 'sessions')],
-      strictErrors
-    })
+  findTranscript: ({ providerSessionId, store, strictErrors }) =>
+    resolveSessionFilePath('codex', providerSessionId, { codexSessionsDirs: [store], strictErrors })
 })
 
 const CODEX_SESSION_HISTORY: StructuredAgentSessionHistory = {

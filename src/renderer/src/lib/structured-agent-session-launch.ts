@@ -49,6 +49,7 @@ import {
   trackStructuredLaunchConfirmationDeadline
 } from './structured-agent-session-launch-prompt-outcome'
 import { repeatedStructuredLaunchAttempt } from './structured-agent-session-launch-request'
+import { releaseStructuredLaunchSource } from './structured-agent-session-launch-source-handoff'
 
 export type { StructuredAgentLaunchOptions, StructuredAgentLaunchReceipt }
 export {
@@ -173,6 +174,8 @@ function joinStructuredLaunchState(
     : (repeat?.stagedPrompt ?? null)
   if (retrying) {
     restartStructuredLaunchState(existing)
+  } else if (!options.resumeFrom?.cliSource) {
+    releaseStructuredLaunchSource(existing)
   }
   if (!retrying && !repeat) {
     launchDraft.seedStructuredAgentLaunchDraft(existing.intent.sessionId, agent, joined)

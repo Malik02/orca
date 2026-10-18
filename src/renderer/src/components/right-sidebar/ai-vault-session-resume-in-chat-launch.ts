@@ -12,11 +12,17 @@ import { prepareAiVaultSessionForResume } from '@/lib/ai-vault-session-resume-pr
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import {
+  beginStructuredAgentSessionProvisionalLaunch,
+  structuredLaunchOwner
+} from '@/lib/structured-agent-session-provisional-tab'
+import { admitStructuredLaunchOnHost } from '@/lib/structured-agent-session-host-admission'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
 import { structuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
 import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export function activateAiVaultResumeWorkspace(workspaceId: string): boolean {
   return activateAndRevealWorkspace(workspaceId) !== false
@@ -35,11 +41,14 @@ export async function resumeAiVaultSessionInNewChat(
   try {
     // Codex rows can live under a shared legacy home; the same preparation the terminal resume
     // runs re-pins them, and its result is what names the conversation the host will look for.
-    const preparedSession = await prepareAiVaultSessionForResume(session)
+    const [preparedSession, agent] = await Promise.all([
+      prepareAiVaultSessionForResume(session),
+      adoptingAgentOnHost(rowAgent, worktreeId)
+    ])
     const plan = adoptAgentSessionLaunchVerdict({
       route: 'structured-native-chat',
       requestId,
-      agent: CLI_CONVERSATION_ADOPTING_AGENTS[rowAgent],
+      agent,
       worktreeId,
       resumeFrom: { providerSessionId: preparedSession.sessionId }
     })
@@ -48,24 +57,30 @@ export async function resumeAiVaultSessionInNewChat(
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan,
       hooks: {},
-      beforeOpen: waitForCreate ? undefined : () => {
-        if (useAppStore.getState().activeWorktreeId !== worktreeId) {
-          return activateAiVaultResumeWorkspace(worktreeId)
-        }
-        return true
-      }
+      beforeOpen: waitForCreate
+        ? undefined
+        : () => {
+            if (useAppStore.getState().activeWorktreeId !== worktreeId) {
+              return activateAiVaultResumeWorkspace(worktreeId)
+            }
+            return true
+          }
     })
     if (launch) {
       void launch.settlement.then((settlement) => {
         const state = useAppStore.getState()
-        if (waitForCreate && settlement.kind === 'structured' && state.activeWorktreeId !== worktreeId &&
+        if (
+          waitForCreate &&
+          settlement.kind === 'structured' &&
+          state.activeWorktreeId !== worktreeId &&
           state.activeWorktreeId === selection.activeWorktreeId &&
           state.activeWorkspaceExecutionHostId === selection.activeWorkspaceExecutionHostId &&
           state.activeView === selection.activeView &&
           state.worktreeNavHistory === selection.worktreeNavHistory &&
           state.worktreeNavHistoryIndex === selection.worktreeNavHistoryIndex &&
           resolveWebSessionVisibleTabId(state, selection.activeWorktreeId ?? '') ===
-            resolveWebSessionVisibleTabId(selection, selection.activeWorktreeId ?? '')) {
+            resolveWebSessionVisibleTabId(selection, selection.activeWorktreeId ?? '')
+        ) {
           activateAiVaultResumeWorkspace(worktreeId)
         }
         if (settlement.kind === 'failed' && !settlement.notified) {
@@ -78,6 +93,28 @@ export async function resumeAiVaultSessionInNewChat(
   }
 }
 
+/** The first chat the worktree's host does not refuse to take the row over, trying them in order.
+ *  A host that cannot answer yet keeps the chat it was asked about, whose own launch reports it. */
+export async function adoptingAgentOnHost(
+  rowAgent: CliConversationRowAgent,
+  worktreeId: string
+): Promise<TuiAgent> {
+  const [first, ...rest] = CLI_CONVERSATION_ADOPTING_AGENTS[rowAgent]
+  const owner = structuredLaunchOwner({ route: 'structured-native-chat' }, worktreeId)
+  const selector = toRuntimeWorktreeSelector(worktreeId)
+  let agent: TuiAgent = first
+  for (const next of rest) {
+    if (
+      !owner ||
+      (await admitStructuredLaunchOnHost(owner.target, selector, agent)).kind !== 'declined'
+    ) {
+      return agent
+    }
+    agent = next
+  }
+  return agent
+}
+
 /** The host refuses an adoption whose conversation another chat already holds, and refuses one it
  *  cannot find under any account home it recognises. Both are actionable, and neither is the
  *  generic "could not prepare" the terminal resume reports. */
@@ -86,7 +123,10 @@ function notifyAiVaultSessionResumeInChatFailure(
   rowAgent: CliConversationRowAgent
 ): void {
   const failure = structuredLaunchFailure(error)
-  if (hasRuntimeRpcErrorCode(error, 'agent_session_conflict') || failure?.code === 'agent_session_conflict') {
+  if (
+    hasRuntimeRpcErrorCode(error, 'agent_session_conflict') ||
+    failure?.code === 'agent_session_conflict'
+  ) {
     toast.error(
       failure?.details?.reason === 'conversationHeldElsewhere' && !failure.owner
         ? cliConversationExitGuidance(rowAgent)

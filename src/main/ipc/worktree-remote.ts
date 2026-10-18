@@ -8,7 +8,6 @@ import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
-import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 import type {
   CreateWorktreeArgs,
@@ -64,16 +63,18 @@ type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
 }
 import {
   sanitizeWorktreeName,
-  resolveWorktreeCreateDisplayNameRequest,
-  resolveWorktreeCreateDisplayNameMeta,
-  computeValidatedBranchName,
   computeWorktreePath,
   computeWorkspaceRootAsync,
   ensurePathWithinWorkspace,
   getWorktreeCreationLayout,
-  getWorktreePathSettings,
-  mergeWorktree
+  getWorktreePathSettings
 } from './worktree-logic'
+import {
+  resolveWorktreeCreateDisplayNameRequest,
+  resolveWorktreeCreateDisplayNameMeta
+} from './worktree-display-name'
+import { computeValidatedBranchName } from './worktree-branch-name'
+import { mergeWorktree } from './worktree-metadata-merge'
 import { resolveCreatedWorktree } from './created-worktree-reconciliation'
 import { notifyLineageRepos } from '../worktree-lineage-change-notification'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
@@ -301,10 +302,9 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   startup: CreateWorktreeArgs['startup']
   setup: CreateWorktreeResult['setup']
   defaultTabs: CreateWorktreeResult['defaultTabs']
-  settings: GlobalSettings
   createdWithAgent: CreateWorktreeArgs['createdWithAgent']
 }): Promise<StagedStartupResult> {
-  const { runtime, worktree, startup, setup, defaultTabs, settings, createdWithAgent } = args
+  const { runtime, worktree, startup, setup, defaultTabs, createdWithAgent } = args
   if (!startup || defaultTabs?.tabs.length) {
     return { didSpawnSetup: false }
   }
@@ -377,37 +377,17 @@ async function spawnLocalStartupAndSetupTerminals(args: {
           ),
           setup.shell
         )
-      const setupLaunchMode =
-        (settings as Partial<Pick<GlobalSettings, 'setupScriptLaunchMode'>>)
-          .setupScriptLaunchMode ?? 'new-tab'
-      if (setupLaunchMode === 'split-vertical' || setupLaunchMode === 'split-horizontal') {
-        if (!startupTerminalHandle) {
-          throw new Error('startup_terminal_missing')
-        }
-        await runtime.splitTerminal(
-          startupTerminalHandle,
-          {
-            direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
-            command: setupCommand,
-            env: setup.envVars,
-            activate: false,
-            surfaceOwner: false
-          },
-          worktree
-        )
-      } else {
-        await runtime.createTerminal(
-          `id:${worktree.id}`,
-          {
-            title: 'Setup',
-            command: setupCommand,
-            env: setup.envVars,
-            activate: false,
-            surfaceOwner: false
-          },
-          worktree
-        )
-      }
+      await runtime.createTerminal(
+        `id:${worktree.id}`,
+        {
+          title: 'Setup',
+          command: setupCommand,
+          env: setup.envVars,
+          activate: false,
+          surfaceOwner: false
+        },
+        worktree
+      )
       didSpawnSetup = true
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -960,14 +940,26 @@ export function createLocalWorktree(
   store: Store,
   mainWindow: BrowserWindow,
   runtime: OrcaRuntimeService,
-  timing: WorktreeCreateTimingRecorder = createWorktreeCreateTimingRecorder()
+  timing: WorktreeCreateTimingRecorder = createWorktreeCreateTimingRecorder(),
+  onWorkspaceCreated?: (worktreeId: string) => void
 ): Promise<CreateWorktreeResult> {
   // Why a holder fired in `finally`: consuming a prepared checkout leaves the pool one short, so a
   // create that fails after that point — include copy, push target, terminal startup — must still
   // arm the replacement. Fires exactly once, after startup on the success path.
   const rearm: PreparationRearmHolder = { fire: () => {} }
   return worktreeCreateGit
-    .run(() => performLocalWorktreeCreate(args, repo, store, mainWindow, rearm, timing, runtime))
+    .run(() =>
+      performLocalWorktreeCreate(
+        args,
+        repo,
+        store,
+        mainWindow,
+        rearm,
+        timing,
+        runtime,
+        onWorkspaceCreated
+      )
+    )
     .finally(() => {
       // Closes the create's measured window first, so its own re-arm is not counted against it.
       timing.finish()
@@ -982,7 +974,8 @@ async function performLocalWorktreeCreate(
   mainWindow: BrowserWindow,
   rearm: PreparationRearmHolder,
   timing: WorktreeCreateTimingRecorder,
-  runtime: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  onWorkspaceCreated?: (worktreeId: string) => void
 ): Promise<CreateWorktreeResult> {
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(
@@ -1585,6 +1578,7 @@ async function performLocalWorktreeCreate(
     const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
+  onWorkspaceCreated?.(worktreeId)
   const { lineage: worktreeLineage, workspaceLineage } = recordWorkspaceLineageForCreatedWorktree(
     store,
     args,
@@ -1700,7 +1694,6 @@ async function performLocalWorktreeCreate(
       startup: args.startup,
       setup,
       defaultTabs,
-      settings,
       createdWithAgent: args.createdWithAgent
     })
   )

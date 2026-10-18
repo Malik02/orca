@@ -12,7 +12,14 @@
     }
   },
   "githubChecks": {
-    "retrying": "正在重试..."
+    "retrying": "正在重试...",
+    "logsNotYetAvailable": "日志输出尚不可用。",
+    "logsLoadErrorDetails": "无法加载日志。请使用刷新重试。",
+    "logsLoadErrorSidebar": "无法加载日志。请打开查看完整详细信息，然后使用刷新重试。",
+    "logsEmpty": "未返回日志输出。",
+    "logsNotRequested": "未请求日志摘录。每项检查最多加载五个失败作业的日志摘录。",
+    "noLogExcerpt": "没有可用的日志摘录。",
+    "refreshingDetails": "正在刷新检查详情…"
   },
   "settings": {
     "chat": {
@@ -29,6 +36,10 @@
         "saveFailed": "无法保存聊天命名设置。",
         "searchAgent": "智能体",
         "searchTemplate": "命令模板"
+      },
+      "providers": {
+        "title": "提供方",
+        "antigravityDescription": "Antigravity 聊天运行在 Orca 下载到此主机的服务器上，与 agy CLI 相互独立。"
       }
     },
     "terminal": {
@@ -376,7 +387,8 @@
         "loopbackPairingBlocked": "此访问链接会指回此设备。",
         "remotePairingUnreachable": "无法连接 {{endpoint}} 上的 Orca。",
         "remotePairingInvalidDetails": "此访问链接包含无效的连接信息。",
-        "remotePairingSaveFailed": "Orca 验证了主机但无法保存它。检查浏览器存储并重试。"
+        "remotePairingSaveFailed": "Orca 验证了主机但无法保存它。检查浏览器存储并重试。",
+        "remotePairingRepairUnavailable": "Re-pairing is not available in the browser. Pair this browser with the server again."
       },
       "web": {
         "preload": {
@@ -407,9 +419,7 @@
       },
       "pairingSecurity": {
         "hide": "隐藏",
-        "storedCodeInsecureOrigin": "此浏览器会保存一个可重复使用的配对码，因为此页面是另一台机器上的纯 http 页面。任何能读取此浏览器存储的人都可以使用它。如需更安全的配对，请通过 https、本机的 localhost 或 SSH 隧道打开 Orca，然后重新配对。",
         "storedCodeNoEd25519": "此浏览器会保存一个可重复使用的配对码，因为它无法创建安全的登录密钥（Ed25519）。请使用最新版浏览器并重新配对，以获得更安全的配对。",
-        "sessionInsecureOrigin": "此配对仅在此标签页打开期间有效，因为此页面是另一台机器上的纯 http 页面。如需让此浏览器记住配对，请通过 https、本机的 localhost 或 SSH 隧道打开 Orca。",
         "sessionNoEd25519": "此配对仅在此标签页打开期间有效，因为此浏览器无法创建安全的登录密钥（Ed25519）。请使用最新版浏览器以获得此浏览器能记住的配对。"
       },
       "runtimeAuth": {
@@ -468,6 +478,7 @@
             "gitStatusUnavailable": "Orca 无法检查此工作区的 Git 状态。请重试，或从对应主机的侧边栏或项目列表中将其删除。",
             "gitStatusUnavailableOlderPeer": "Orca 无法将此 Git 状态检查失败与主机匹配。请更新较旧的已连接端，或从对应主机的侧边栏或项目列表中删除该工作区。",
             "forceNeedsApproval": "请先检查并确认此工作区，然后再强制删除。",
+            "agentStartedSinceConfirmation": "此工作区中有一个智能体正在运行。请再次删除以确认停止该智能体。",
             "hostCollision": "错误：此工作区存在于同一路径的多个主机上",
             "hostUnresolved": "Orca 无法判断哪个主机拥有此工作区。刷新项目并再次查看。"
           }
@@ -538,7 +549,9 @@
           "presenceProfileOverflow": "{{names}} 及另外 {{count}} 个",
           "removeProjectFailed": "删除项目失败",
           "wslFilesystemBoundaryTitle": "该项目存储在 Windows 驱动器上",
-          "wslFilesystemBoundaryDescription": "该项目的 Git 在 {{distro}} 中运行，它通过 WSL 文件系统桥到达 Windows 驱动器。预计 git 的速度比存储在 {{distro}} 内的副本慢大约 20 倍。"
+          "wslFilesystemBoundaryDescription": "该项目的 Git 在 {{distro}} 中运行，它通过 WSL 文件系统桥到达 Windows 驱动器。预计 git 的速度比存储在 {{distro}} 内的副本慢大约 20 倍。",
+          "moveToGroupOtherHost": "无法将项目移动到分组",
+          "moveToGroupOtherHostDesc": "运行此项目的计算机上没有此分组。项目只能加入保存在其所在计算机上的分组。"
         },
         "settings": {
           "e12dab333b": "切换服务器失败",
@@ -3416,7 +3429,9 @@
             "copiedLink": "已复制链接",
             "copyLinkFailed": "复制链接失败",
             "downloadOpenWithDefaultApp": "下载并使用默认应用程序打开",
-            "downloadOpenFailed": "无法下载“{{value0}}”。"
+            "downloadOpenFailed": "无法下载“{{value0}}”。",
+            "openInThisGroup": "在此分组中打开",
+            "openInThisGroupRefused": "无法在此分组中打开 {{value0}}"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "主机不可用",
@@ -4169,7 +4184,14 @@
             "runtime_unavailable_explanation": "远程主机可能仍在运行；仅 Orca 运行时连接不可用。",
             "contact_note": "主机可能仍在运行；仅 Orca 连接不可用。",
             "last_connected": "最后连接 {{value0}}",
-            "reconnect_attempt": "尝试{{value0}}"
+            "reconnect_attempt": "尝试{{value0}}",
+            "access_revoked": "Access revoked",
+            "access_revoked_summary": "This server revoked access for this computer",
+            "access_revoked_explanation": "Re-pair with a new pairing link from the server to reconnect.",
+            "update_required": "Update required",
+            "update_required_summary": "Orca versions are not compatible",
+            "update_required_explanation": "Update Orca on this computer or on the server, then connect again.",
+            "repair": "Re-pair…"
           },
           "NativeChatResumeStatusSegment": {
             "labelOne": "恢复 1 次聊天",
@@ -5392,6 +5414,12 @@
           "00c4235c10": "没有匹配“{{value0}}”",
           "largeInputNoMatches": "没有匹配此长输入的结果"
         },
+        "SleepTwinWorkspaceDialog": {
+          "title": "Sleep Workspace",
+          "alsoSleeps": "Also sleeps the copy on {{hosts}}",
+          "cancel": "Cancel",
+          "confirm": "Sleep"
+        },
         "RemoveFolderDialog": {
           "4dc5b5065b": "移除",
           "d36883e046": "取消",
@@ -5834,7 +5862,8 @@
           "sidebarRowMissing": "目标不再存在",
           "failedUnnestWorkspace": "展开工作区失败",
           "groupRenameFailed": "重命名组失败",
-          "groupRenameFailedDesc": "Orca 无法与该群组的主持人确认新名称。重新连接后重新检查该组。"
+          "groupRenameFailedDesc": "Orca 无法与该群组的主持人确认新名称。重新连接后重新检查该组。",
+          "hostRepairRequired": "Re-pair required"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -5968,8 +5997,7 @@
                   "7edb8ebe24": "从 URL 克隆",
                   "a6c20dca96": "从 SSH 目标打开项目",
                   "serverSshTitle": "此服务器 SSH 主机上的项目",
-                  "serverSshDescription": "从此服务器连接的 SSH 主机打开项目文件夹",
-                  "serverSshUpdate": "更新此服务器后才能在其 SSH 主机上添加项目",
+                  "serverSshAddOnThisComputer": "无法从服务器使用。请在此电脑上添加该 SSH 主机以打开其项目。",
                   "fb4fc5380e": "本地项目、Git 仓库或包含多个仓库的文件夹",
                   "2281fdc8c7": "浏览文件夹",
                   "runtimeBrowseDescription": "此主机上的现有 Git 仓库或文件夹"
@@ -6051,6 +6079,9 @@
               "8bc3fc0671": "无法睡眠工作区",
               "legacy": {
                 "unverified": "旧版主机运行时无法确认终端已关闭。工作区已保持打开；请更新主机后重试。"
+              },
+              "twin": {
+                "unattributed": "Orca couldn't tell which host runs this workspace's terminals, so the workspace was kept open. Reconnect its hosts and try again."
               },
               "host": {
                 "unverified": "主机无法确认终端已关闭。工作区已保持打开；请检查连接后重试。"
@@ -6275,7 +6306,8 @@
           "59b553e2aa": "断开连接",
           "2d3e4f5a6b": "检查连接",
           "3c4d5e6f7a": "管理主机…",
-          "6e7f8a9b0c": "删除主机..."
+          "6e7f8a9b0c": "删除主机...",
+          "repair": "Re-pair…"
         },
         "WorkspaceKanbanDrawer": {
           "1975a4e480": "任务状态同步失败",
@@ -6286,6 +6318,7 @@
           "f4a5b6c7d8": "无法更新 Linear 议题 {{value0}}。",
           "a5b6c7d8e9": "无法同步 Linear 议题 {{value0}}。",
           "b6c7d8e9f0": "无法完成任务状态同步。",
+          "f0a1b2c3d4": "已跳过 Linear 问题 {{value0}}：此工作区位于多个主机上。",
           "c7d8e9f0a1": "已更新 {{value0}} 个",
           "d8e9f0a1b2": "已跳过 {{value0}} 个",
           "e9f0a1b2c3": "失败 {{value0}} 个"
@@ -6417,8 +6450,7 @@
         },
         "MarkdownImageLightbox": {
           "image": "Image",
-          "expand": "Expand image",
-          "close": "Close"
+          "expand": "Expand image"
         },
         "WorktreeDeveloperMenu": {
           "developer": "Developer",
@@ -8352,7 +8384,11 @@
           "serverWorkspaceWindowClosed": "工作区窗口已关闭",
           "serverRuntimeUnavailable": "Orca 不可用",
           "serverRuntimeUnavailableDescription": "SSH 传输已连接，但 Orca 运行时未应答。主机可能仍在运行。",
-          "serverReconnecting": "重新连接"
+          "serverReconnecting": "重新连接",
+          "accessRevoked": "{{value0}} no longer accepts this computer. Re-pair it with a new access link.",
+          "repair": "Re-pair…",
+          "serverAccessRevoked": "Access revoked",
+          "orcaVersionLastSeen": "Orca v{{value0}} (last seen)"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "复制 {{value0}}"
@@ -8701,8 +8737,7 @@
           "addDescription": "添加一台可通过 SSH 登录的持久机器。",
           "editingPrefix": "正在编辑",
           "allowRemoteCliControl": "允许此主机的 orca CLI 控制 Orca",
-          "allowRemoteCliControlHelp": "开启后，在此主机上运行的 orca 命令可以打开并操作此桌面上的 Orca 浏览器标签页，但仅限此主机的工作区，且仅在主机连接期间。它们无法读取你的文件、剪贴板或 Cookie。关闭时，它们只能访问此主机自身的 Orca 服务器。",
-          "allowRemoteCliControlReset": "更新后 Orca 关闭了此项，因为它现在允许此主机操作你桌面上的浏览器。仅在需要时再重新开启。"
+          "allowRemoteCliControlHelp": "新主机默认开启。允许在此主机上运行的 orca 命令打开并操作此桌面上的 Orca 浏览器标签页，但仅限此主机的工作区，且仅在主机连接期间；并允许此主机上由旧版 Orca 启动的终端为其自身受监督的工作运行编排命令（check、inbox、send、ask、reply）。它们无法读取你的文件、剪贴板或 Cookie。关闭时，它们只能访问此主机自身的 Orca 服务器。"
         },
         "TasksPane": {
           "f71d8a9dd3": "任务提供者",
@@ -12059,7 +12094,9 @@
           "networkConnection": "网络连接",
           "notAttempted": "未尝试",
           "saveFailed": "无法保存主机",
-          "saveFailedHelp": "主机已验证，但 Orca 无法保存。检查名称和本地设置存储，然后重试。"
+          "saveFailedHelp": "主机已验证，但 Orca 无法保存。检查名称和本地设置存储，然后重试。",
+          "differentServer": "This link is for a different server",
+          "differentServerHelp": "This pairing link is for a different server. Create the link on the server you are re-pairing."
         },
         "CloudVmSetupGuide": {
           "title": "创建云虚拟机",
@@ -12329,9 +12366,6 @@
           "stopping": "停止…",
           "confirm": "停止清理"
         },
-        "NativeChatSupportedAgents": {
-          "label": "支持智能体："
-        },
         "contrast": {
           "title": "色彩对比",
           "description": "提高文本可读性或保留终端程序选择的颜色。",
@@ -12569,6 +12603,7 @@
           "tunnelUnsupported": "此版本的 Orca 不支持此主机：其 SSH 服务器不允许端口转发，Orca 也无法通过 SSH 会话连接到其服务器。如需继续使用，请安装旧版本的 Orca。",
           "setupRetry": "Orca 无法在此主机上启动其服务器。请重新连接。",
           "moveHeld": "由于无法确认服务器上的副本，Orca 已暂停将此主机的项目迁移到其受管服务器。没有任何数据丢失：在迁移完成之前，主机会保留其项目并保持锁定。重新连接即可继续。如果服务器无法恢复，请在“设置 > 受管服务器”中停止或忘记它。",
+          "olderTerminalsBridged": "尚未迁移到托管服务器：由旧版本 Orca 启动的终端仍在此主机的项目中运行。它们在这里仍可正常使用。请关闭它们或在主机上结束它们，然后重新连接。",
           "olderTerminalsUncounted": "由旧版本 Orca 启动的终端仍在此主机上运行，且不会自行停止。请在该版本的 Orca 中关闭它们，或在主机上结束它们，然后重新连接。",
           "olderTerminalsUnverifiable": "Orca 无法确认由旧版本 Orca 启动的终端是否已退出。请重新连接后重试。",
           "olderTerminals_one": "由旧版本 Orca 启动的 {{count}} 个终端仍在此主机上运行，且不会自行停止。请在该版本的 Orca 中关闭它们，或在主机上结束它们，然后重新连接。",
@@ -12631,6 +12666,13 @@
           "remove": "移除",
           "turnOn": "在实验性中开启",
           "forceUpdate": "强制更新"
+        },
+        "RuntimeRepairDialog": {
+          "title": "Re-pair {{name}}",
+          "description": "{{name}} no longer accepts this computer. On {{name}}, open Settings → Remote Orca Servers → Share this host, create a link for another Orca client, then paste it here.",
+          "submit": "Re-pair",
+          "success": "Re-paired with {{name}}",
+          "failed": "Re-pair failed"
         }
       },
       "right": {
@@ -13302,7 +13344,6 @@
                 "a6de3e5a20": "清除已排队评论",
                 "49ea0937e4": "将评论添加到解决列表",
                 "9fecebb29d": "添加",
-                "b8c4e2a1f7": "查看完整日志",
                 "f8a2c91d04": "加入智能体队列",
                 "b4e8a1c902": "已加入队列",
                 "7c1f0a2b11": "打开",
@@ -15640,7 +15681,9 @@
           "1829437fce": "新 Markdown"
         },
         "DiagramViewerModal": {
-          "title": "图表",
+          "title": "图表"
+        },
+        "PanZoomImageDialog": {
           "zoomOut": "缩小",
           "zoomIn": "放大",
           "fit": "适应屏幕",
@@ -17979,11 +18022,18 @@
         "title": "无法连接到你的 Orca 主机",
         "description": "没有任何内容丢失。主机响应后 Orca 会重新加载，在此之前不会保存更改。",
         "retry": "立即重试"
+      },
+      "webPairingRefused": {
+        "title": "Orca 拒绝了此浏览器",
+        "retry": "重试"
       }
     }
   },
   "components": {
     "native-chat": {
+      "install": {
+        "checking": "正在检查 {{agent}} 是否已在此主机上就绪…"
+      },
       "reasoning": "推理",
       "contextMenu": {
         "copyOrcaSessionId": "复制 Orca 会话 ID",
@@ -18012,7 +18062,7 @@
         "signInThenSend": "请登录，然后重新发送您的消息。",
         "historyTooLarge": "此对话的历史记录过大，无法在此恢复。",
         "managedAccountEnvOverride": "此次 Claude 启动设置了自己的 Anthropic 登录变量。请移除这些变量以使用受管理的 Claude 账户。",
-        "accountSwitchInProgress": "正在切换 Claude 账户。请在切换完成后重试。",
+        "accountSwitchInProgress": "正在此主机上更改 {{agent}} 的设置。请在完成后重试。",
         "managedAccountUnsupported": "当 WSL 中添加了 Claude 账户时，Claude 聊天需要 Windows Claude 账户。",
         "launchFolderMissing": "此聊天运行所在的文件夹已不存在。请恢复该文件夹以继续此聊天。",
         "historyInOtherAccount": "此聊天的历史记录位于另一个 Claude 账户中。请切换回该账户以继续此聊天。",
@@ -18041,6 +18091,7 @@
         "attachmentInvalid": "此消息中的附件无法发送给智能体。",
         "attachmentUnreadable": "无法读取此消息中的附件，因此消息未发送。",
         "emptyMessage": "此消息为空，因此未发送。",
+        "commandUnavailable": "此命令在 {{agent}} 聊天中不可用，因此未发送。",
         "queueFull": "等待智能体处理的消息过多，因此此消息未发送。",
         "writeFailed": "Orca 无法将此消息交给智能体，因此消息未发送。",
         "cancelled": "此消息在智能体开始处理前已撤回。",
@@ -18182,6 +18233,8 @@
         "removeImagesToSend": "有些图片无法恢复。请将其移除后再发送。",
         "imageAttachAgainLabel": "重新附加",
         "pastedImageNotKeptLabel": "未保留",
+        "imageNumber": "图片 #{{number}}",
+        "imageReferenceMissing": "图片已移除",
         "imagePasteFailed": "图片粘贴失败。",
         "worktreeNotReady": "工作树未就绪 — 请稍后重试。",
         "pasteUnavailable": "无法粘贴 — 此聊天当前不接受输入。",
@@ -18230,7 +18283,6 @@
         "imageSaving": "保存粘贴的图像...",
         "pendingAttachmentLimit": "太多附件正在等待。在附加更多内容之前先完成创作。",
         "viewAttachment": "查看图片",
-        "imagePreview": "全尺寸图像预览",
         "imagePreviewUnavailable": "预览不可用",
         "copyImage": "复制图片",
         "copyImageFailed": "无法复制图片",
@@ -18247,6 +18299,7 @@
         "permissionAskSharedDescription": "在执行尚未获准的编辑或命令前询问",
         "permissionAcceptEdits": "接受编辑",
         "permissionAcceptEditsDescription": "批准文件编辑和文件命令；其余操作会询问",
+        "permissionAcceptEditsAntigravityDescription": "批准文件编辑；其余操作会询问",
         "permissionAuto": "替我批准",
         "permissionAutoDescription": "代你审核批准请求",
         "permissionFullAccess": "完全访问",
@@ -18591,7 +18644,7 @@
       },
       "goal": {
         "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",
-        "clear": "明确的目标",
+        "clear": "清除目标",
         "chip": "目标",
         "exitMode": "退出目标模式",
         "sentAsGoal": "作为目标发送",
@@ -18599,11 +18652,12 @@
         "expand": "显示完整目标",
         "pause": "暂停目标",
         "resume": "恢复目标",
-        "pursuing": "追求目标",
-        "paused": "暂停进球",
-        "blocked": "目标被挡",
-        "limited": "目标有限",
-        "attachmentsUnsupported": "在设定目标之前删除附件。"
+        "pursuing": "正在追求目标",
+        "paused": "目标已暂停",
+        "blocked": "目标受阻",
+        "limited": "目标受限",
+        "attachmentsUnsupported": "在设定目标之前删除附件。",
+        "set": "目标已设定"
       },
       "fileLinks": {
         "notFound": "未找到文件：{{value0}}",
@@ -18652,6 +18706,9 @@
         "editFailed": "此消息无法编辑。",
         "editGone": "此消息已发送或移除。你编辑的内容已放入聊天输入框。",
         "editGonePrompt": "此消息已发送或移除。回答智能体后，你编辑的内容会出现在聊天输入框中。",
+        "imageCount": "{{count}} 张图片",
+        "imageCount_one": "{{count}} 张图片",
+        "imageCount_other": "{{count}} 张图片",
         "collapse": "收起",
         "expand": "展开",
         "queued": "已排队",
@@ -18957,6 +19014,13 @@
           "label": "主持人：{{value0}}",
           "unknown": "未知主机",
           "candidateName": "{{value0}} 在 {{value1}} 上"
+        },
+        "stopAgents": {
+          "titleMany": "停止这些智能体？",
+          "descriptionOne": "删除将停止智能体当前任务。",
+          "descriptionMany": "删除将停止这些智能体当前任务。",
+          "confirm": "停止智能体并删除",
+          "confirmOne": "停止智能体并删除"
         }
       },
       "creation": {
@@ -19157,6 +19221,57 @@
       "keywordJira": "Jira",
       "keywordDefaultProject": "默认项目",
       "keywordIssuePicker": "议题选择器"
+    },
+    "managed-runtime": {
+      "cancelled": "已取消安装。",
+      "cancelling": "正在取消…",
+      "damaged": "此 {{agent}} 副本已损坏。",
+      "downloadSize": "下载大小 {{size}} MB。",
+      "downloading": "正在下载 {{done}} MB。",
+      "downloadingOf": "正在下载 {{done}} MB / {{total}} MB。",
+      "external": "使用在此主机上找到的 {{agent}} 副本。",
+      "extracting": "正在解压 {{agent}}。",
+      "failed": "安装失败。请重试。",
+      "cancelFailed": "无法取消安装。请重试。",
+      "install": "安装 {{agent}}",
+      "installManaged": "安装 Orca 的副本",
+      "installed": "已安装。",
+      "notInstalled": "未安装。",
+      "progress": "{{agent}} 下载",
+      "readFailed": "无法检查此主机上的 {{agent}}。正在重试。",
+      "reinstall": "重新安装",
+      "remove": "移除已下载的运行时",
+      "removeConfirm": "移除",
+      "removeDescription": "正在运行的 {{agent}} 聊天会停止。其历史记录会保留。",
+      "removeKeep": "取消",
+      "removeTitle": "要从 {{host}} 移除已下载的 {{agent}} 运行时吗？",
+      "removing": "正在移除…",
+      "retry": "重试安装",
+      "thisComputer": "此计算机",
+      "unavailable": "{{agent}} 在此主机上不可用。",
+      "update": "更新",
+      "verifying": "正在检查已下载的运行时。",
+      "installTitle": "安装 {{agent}} 以开始聊天",
+      "continueTitle": "安装 {{agent}} 以继续",
+      "heroBody": "一次性下载 {{size}} MB，由运行此聊天的电脑上的 {{agent}} 聊天共用。",
+      "heroBodyNoSize": "一次性下载，由运行此聊天的电脑上的 {{agent}} 聊天共用。",
+      "stripSize": "在运行此聊天的电脑上下载 {{size}} MB",
+      "settingsHint": "也可在 设置 › 聊天 › 供应商 中安装",
+      "installShort": "安装",
+      "tryAgain": "重试",
+      "cancelShort": "取消",
+      "failedTitle": "无法安装 {{agent}}",
+      "cancelledTitle": "安装已取消",
+      "cancelledBody": "未安装任何内容。",
+      "downloadingTitle": "正在下载 {{agent}}",
+      "unpackingTitle": "正在解压 {{agent}}",
+      "checkingTitle": "正在检查下载内容",
+      "progressOf": "{{done}} / {{total}} MB",
+      "unpackingDetail": "正在解压运行时",
+      "checkingDetail": "正在检查已下载的运行时",
+      "stepDownload": "下载",
+      "stepUnpack": "解压",
+      "stepCheck": "检查"
     }
   },
   "dashboardPopout": {
@@ -19845,6 +19960,12 @@
       "confirmBody": "重新启动会结束 {{sessions}} 中运行的所有进程。支持恢复的智能体之后可以恢复；shell 和其他作业则不能，必须重新启动。请在智能体空闲时执行此操作。",
       "cancel": "取消",
       "confirm": "重新启动并结束进程"
+    },
+    "restartedInputNotSent": "终端在您输入时重新启动，部分输入可能未送达。请先查看新的 shell，再重新输入。",
+    "stalledDaemonBanner": {
+      "body": "此计算机上的后台工作已停滞。输入和新终端可能无法工作。重新启动终端服务会结束其正在运行的终端和命令。",
+      "review": "查看重新启动选项",
+      "title": "终端服务可能需要重新启动"
     }
   },
   "fileSearch": {
@@ -20068,7 +20189,7 @@
       "loading": "正在加载状态更改…",
       "completeInJira": "在 Jira 中完成“{{name}}”",
       "unsupported": "Jira 需要 Orca 目前无法收集的字段：{{fields}}。",
-      "chooseResolution": "选择解决方案",
+      "chooseResolution": "选择解决结果",
       "comment": "评论",
       "back": "返回",
       "apply": "更改状态",
@@ -20086,6 +20207,22 @@
       "cancel": "取消",
       "noTransition": "{{key}} 没有可转到 {{column}} 的状态更改。",
       "queryTooLong": "Jira 查询过长。请缩短查询或清除筛选条件。"
+    },
+    "favourites": {
+      "activeLabel": "Jira 收藏夹：{{name}}",
+      "applyFailed": "无法应用 Jira 收藏夹。",
+      "chooseSite": "选择一个已连接的 Jira 站点以使用其收藏夹。",
+      "clear": "清除 Jira 收藏夹",
+      "clearFailed": "无法清除已保存的筛选器。待加载或保存完成后再重试。",
+      "empty": "未找到 Jira 收藏夹。",
+      "find": "查找 Jira 收藏夹",
+      "label": "Jira 收藏夹",
+      "loadFailed": "无法加载 Jira 收藏夹。",
+      "loading": "正在加载收藏夹…",
+      "refresh": "刷新",
+      "siteMismatch": "从收藏夹所在的 Jira 站点选择项目，或清除项目筛选器。",
+      "truncated": "部分收藏夹无法列出。请在 Jira 中管理收藏夹以缩小列表。",
+      "unsupported": "更新 Jira 主机以使用收藏夹。"
     }
   },
   "updates": {

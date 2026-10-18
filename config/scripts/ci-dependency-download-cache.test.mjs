@@ -349,13 +349,19 @@ describe('CI dependency download caches', () => {
       const shared = workflow('ci-cache-warmup')
       const platformWorkflow = workflow('ci-cache-warmup-platforms')
       const platforms = read(platformWorkflow.jobs['warm-platforms'].uses)
-      const context = { github: { event_name: event, event: { pull_request: { draft } } } }
+      const contextFor = (isDraft) => ({
+        github: {
+          event_name: event,
+          event: event === 'pull_request' ? { pull_request: { draft: isDraft } } : {}
+        }
+      })
+      const context = contextFor(draft)
       expect(runInNewContext(platforms.jobs['warm-linux-runtime'].if, context)).toBe(armRuns)
       expect(runInNewContext(shared.jobs['warm-platforms'].if, context)).toBe(sharedPlatforms)
-      expect(runInNewContext(shared.jobs.warm.if ?? 'true', context)).toBe(admitted)
-      expect(runInNewContext(platformWorkflow.jobs['warm-platforms'].if ?? 'true', context)).toBe(
-        admitted
-      )
+      for (const guard of [shared.jobs.warm.if, platformWorkflow.jobs['warm-platforms'].if]) {
+        expect(runInNewContext(guard, context)).toBe(admitted)
+        expect(runInNewContext(guard, contextFor(!draft))).toBe(event !== 'pull_request' || draft)
+      }
       expect(platforms.jobs['warm-windows'].if).toBeUndefined()
       expect(platforms.jobs['warm-windows'].strategy.matrix.os).toEqual([
         'windows-2022',

@@ -2,7 +2,7 @@ import type { Store } from '../persistence'
 import type { SshRepoReadoption, SshTarget } from '../../shared/ssh-types'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../shared/execution-host'
 import { normalizeSshConfigAlias } from '../../shared/ssh-config-alias'
-import { loadUserSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
+import { loadUserSshConfig, sshConfigHostsToTargets } from './config/ssh-config-parser'
 import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
 import {
   buildRemovedSshTargetTombstone,
@@ -37,7 +37,7 @@ export class SshConnectionStore {
 
   addTarget(target: Omit<SshTarget, 'id'>): SshTarget {
     const full: SshTarget = {
-      ...withRemoteCliControlConsent(target),
+      ...target,
       configHost: target.configHost ?? target.host,
       // Why: default to 'manual' so user-created targets are never overwritten
       // by a later ~/.ssh/config import (only 'ssh-config' targets are synced).
@@ -102,10 +102,9 @@ export class SshConnectionStore {
       key in updates && existing?.[key] !== updates[key]
     const resetsRuntime =
       changed('remoteRuntime') || changed('host') || changed('port') || changed('configHost')
-    const consented = withRemoteCliControlConsent(updates)
     const updated = this.store.updateSshTarget(
       id,
-      resetsRuntime ? { ...consented, remoteRuntimeResolution: undefined } : consented
+      resetsRuntime ? { ...updates, remoteRuntimeResolution: undefined } : updates
     )
     if (updated) {
       // Why: actively editing a target reclaims its alias from the deleted set,
@@ -295,17 +294,4 @@ function isLegacyConfigImportTarget(target: SshTarget): boolean {
   return Boolean(
     alias && target.label === alias && target.configHost === alias && target.host !== alias
   )
-}
-
-/** Saving the switch records consent to its current meaning and retires the reset notice. */
-function withRemoteCliControlConsent<T extends Partial<SshTarget>>(updates: T): T {
-  if (!('allowRemoteCliControl' in updates)) {
-    return updates
-  }
-  return {
-    ...updates,
-    allowRemoteCliControlConsent:
-      updates.allowRemoteCliControl === true ? 'desktop-browser-bridge' : undefined,
-    allowRemoteCliControlReset: undefined
-  }
 }

@@ -10,6 +10,7 @@ import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
   requireUnownedStructuredAgentSessionAdoption,
   resolveStructuredAgentSessionAdoptionForCreate,
+  structuredAgentSessionAdoptAttach,
   type StructuredAgentSessionCreateIntentInput
 } from '../structured-agent-session-create-adoption'
 import { isNativeLocalLocation, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
@@ -255,23 +256,13 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       ...(options ? { options } : {}),
       ...(input.resumeFrom && adoption
         ? {
-            // `adopt` is what makes the reservation seed the handle chain. Presence of
-            // `providerHandle` alone must not: `agentSession.ensure` already passes one today
-            // without adopting anything.
-            adopt: {
-              providerHandle: {
-                transport: definition.handleTransport,
-                agent: definition.agent,
-                nativeId: transcriptImport!.handleNamesTranscript
-                  ? adoption.transcriptPath
-                  : input.resumeFrom.providerSessionId
-              },
+            adopt: structuredAgentSessionAdoptAttach({
+              definition,
+              handleNamesTranscript: transcriptImport!.handleNamesTranscript,
               transcriptPath: adoption.transcriptPath,
-              source: {
-                providerSessionId: input.resumeFrom.providerSessionId,
-                workspaceCwd: workspaceCwd
-              }
-            }
+              providerSessionId: input.resumeFrom.providerSessionId,
+              workspaceCwd
+            })
           }
         : {}),
       runtimeKind: 'native'

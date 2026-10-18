@@ -2,6 +2,7 @@ import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import {
   adoptsCliConversations,
+  chatAgentsShareConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS
 } from '../../shared/structured-agent-cli-conversation-adoption'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
@@ -69,7 +70,9 @@ export async function assertCliConversationWritersExited(
     agentSessionRefusalError('agent_session_conflict', { reason: 'conversationHeldElsewhere' })
   const isConversation = (rowAgent: unknown, id: string | undefined) =>
     adoptsCliConversations(rowAgent) &&
-    CLI_CONVERSATION_ADOPTING_AGENTS[rowAgent] === agent &&
+    CLI_CONVERSATION_ADOPTING_AGENTS[rowAgent].some((rowChat) =>
+      chatAgentsShareConversations(rowChat, agent)
+    ) &&
     id === providerSessionId
   const paneOf = (coordinates: CliWriterCoordinates) => host.terminal(coordinates)?.pane ?? null
   // The pane's PTY itself, not a recorded pid: a wrapper pid can read exited beside a paused agent.

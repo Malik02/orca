@@ -2,10 +2,7 @@ import {
   AgentStatusObservedPaneIdentities,
   AgentStatusObservedPaneIdentityCapture
 } from '../runtime/agent-status-observed-pane-identity'
-import {
-  OPEN_CODE_WRITER_TOPOLOGY,
-  cliWriterExecutionMatcher
-} from './server/cli-writer-observation'
+import { OPEN_CODE_WRITER_TOPOLOGY } from './server/cli-writer-observation'
 import { toAgentStatusIpcPayload } from './server/server-status-identity'
 import { buildRelayHookEnvelope } from '../../wsl-guest/agent-hook-envelope-build'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -78,7 +75,7 @@ describe('OpenCode writer observation', () => {
     }
     await post()
     capture.attach(runtime)
-    server.setCliWriterExecutionMatcher(cliWriterExecutionMatcher(identities, runtime))
+    server.setCliWriterExecutionMatcher(identities, runtime)
     expect(observation()?.topology).toBe('unverifiable')
     await post()
     const interrupt = () => {

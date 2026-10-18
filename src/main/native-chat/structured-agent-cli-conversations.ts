@@ -1,6 +1,7 @@
 // How a structured agent's chats meet the conversations its own CLI records: adopting one into a new
 // chat, and owning the Session History rows a chat's conversation shows as.
 
+import { isAbsolute } from 'node:path'
 import { admitTranscriptPath } from './transcript-path-admission'
 import {
   isLegacyAgentSessionAccountHome,
@@ -23,17 +24,19 @@ export type StructuredAgentTranscriptImport = {
     settings: StructuredAgentTranscriptImportSettings
     selectedAccountHome: AgentSessionAccountHome
   }) => AgentSessionAccountHome[]
-  /** Admit hook and fallback paths against this account's own storage. */
-  admitTranscriptPath: (input: {
-    accountHome: AgentSessionAccountHome
-    transcriptPath: string
-    launchEnv: NodeJS.ProcessEnv
-  }) => Promise<string | null>
-  /** Where the transcript is (its file, or OpenCode's database); null when the home lacks it. */
-  findTranscript: (input: {
-    providerSessionId: string
+  /** Where this account keeps its conversations (a directory, or OpenCode's database); null when
+   *  it has none. Admission and lookup both take this one answer, so they cannot disagree. */
+  conversationStore: (input: {
     accountHome: AgentSessionAccountHome
     /** The execution host's effective agent environment before account binding. */
+    launchEnv: NodeJS.ProcessEnv
+  }) => string | null
+  /** Admit hook and fallback paths against the account's store. */
+  admitTranscriptPath: (input: { store: string; transcriptPath: string }) => Promise<string | null>
+  /** Where the transcript is (its file, or OpenCode's database); null when the store lacks it. */
+  findTranscript: (input: {
+    providerSessionId: string
+    store: string
     launchEnv: NodeJS.ProcessEnv
     workspaceCwd: string
     strictErrors?: boolean
@@ -43,15 +46,25 @@ export type StructuredAgentTranscriptImport = {
 }
 
 /** The import of an agent whose account is one directory, named by the chat's own variable. */
+/** A store is an absolute path; anything else is none, so lookup and admission agree on it. */
+export function absoluteConversationStore(path: string | null | undefined): string | null {
+  const trimmed = path?.trim()
+  return trimmed && isAbsolute(trimmed) ? trimmed : null
+}
+
 export function directoryTranscriptImport(directories: {
-  transcriptRoot: (input: { accountHomePath: string; launchEnv: NodeJS.ProcessEnv }) => string | null
+  conversationStore: (input: {
+    accountHomePath: string
+    launchEnv: NodeJS.ProcessEnv
+  }) => string | null
   accountHomeCandidates: (input: {
     settings: StructuredAgentTranscriptImportSettings
     selectedAccountHomePath: string
   }) => string[]
+  /** Searches only `store`; it never derives a root of its own. */
   findTranscript: (input: {
     providerSessionId: string
-    accountHomePath: string
+    store: string
     launchEnv: NodeJS.ProcessEnv
     workspaceCwd: string
     strictErrors?: boolean
@@ -59,13 +72,14 @@ export function directoryTranscriptImport(directories: {
   handleNamesTranscript?: true
 }): StructuredAgentTranscriptImport {
   return {
-    admitTranscriptPath: async ({ accountHome, transcriptPath, launchEnv }) => {
-      if (!isLegacyAgentSessionAccountHome(accountHome)) {
-        return null
-      }
-      const root = directories.transcriptRoot({ accountHomePath: accountHome.path, launchEnv })
-      return root ? (await admitTranscriptPath(root, transcriptPath))?.path ?? null : null
-    },
+    conversationStore: ({ accountHome, launchEnv }) =>
+      isLegacyAgentSessionAccountHome(accountHome)
+        ? absoluteConversationStore(
+            directories.conversationStore({ accountHomePath: accountHome.path, launchEnv })
+          )
+        : null,
+    admitTranscriptPath: async ({ store, transcriptPath }) =>
+      (await admitTranscriptPath(store, transcriptPath))?.path ?? null,
     ...(directories.handleNamesTranscript ? { handleNamesTranscript: true } : {}),
     accountHomeCandidates: ({ settings, selectedAccountHome }) =>
       isLegacyAgentSessionAccountHome(selectedAccountHome)
@@ -75,16 +89,7 @@ export function directoryTranscriptImport(directories: {
             .filter((path) => path.length > 0)
             .map((path) => ({ variable: selectedAccountHome.variable, path }))
         : [],
-    findTranscript: async ({ providerSessionId, accountHome, launchEnv, workspaceCwd, strictErrors }) =>
-      isLegacyAgentSessionAccountHome(accountHome)
-        ? directories.findTranscript({
-            providerSessionId,
-            accountHomePath: accountHome.path,
-            launchEnv,
-            workspaceCwd,
-            strictErrors
-          })
-        : null
+    findTranscript: (input) => directories.findTranscript(input)
   }
 }
 

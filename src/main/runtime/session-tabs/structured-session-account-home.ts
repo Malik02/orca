@@ -1,5 +1,6 @@
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
+import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithStructuredSessionCliWriterHost } from './structured-session-cli-writer-host'
 
 export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRuntimeWithStructuredSessionCliWriterHost {
@@ -15,12 +16,6 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
     if (!registration) {
       return null
     }
-    const services = {
-      getClaudeConfigDirectory: (target) => this.accounts.getClaudeConfigDirectory(target),
-      prepareCodexLaunchHome: this.prepareCodexStructuredLaunchFn,
-      readCodexLaunchHome: this.resolveCodexStructuredLaunchHomeFn,
-      workspaceTrustSettings: () => this.requireStore().getSettings()
-    }
     return async ({ launchEnv, location }) =>
       registration.resolveAccountHome(
         {
@@ -34,7 +29,14 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
                   (await this.resolveRuntimeFileTarget(worktree)).worktree.path
               : null
         },
-        services
+        {
+          getClaudeConfigDirectory: (target) => this.accounts.getClaudeConfigDirectory(target),
+          prepareCodexLaunchHome: this.prepareCodexStructuredLaunchFn,
+          readCodexLaunchHome: this.resolveCodexStructuredLaunchHomeFn,
+          workspaceTrustSettings: () => this.requireStore().getSettings(),
+          // The chat host's own state root (ensureStructuredAgentSessionHost).
+          stateDirectory: getProfileUserDataPath()
+        }
       )
   }
 }
