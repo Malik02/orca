@@ -43,6 +43,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const UNEXPECTED_PROVIDER_EXIT_OUTCOME =
   'Codex stopped while this response was in progress. You can continue in this conversation.'
@@ -63,15 +64,18 @@ let hostErrors: unknown[]
 let statusSink: StructuredAgentSessionStatusSink
 let clock: number
 function adapter(): StructuredAgentSessionAdapter {
-  return {
-    acquire,
-    closeSession,
-    releaseAcquisition: vi.fn(async () => true),
-    dispatch,
-    cancelTurn: vi.fn(async () => ({ cancelled: false })),
-    answerPrompt: vi.fn(async () => undefined),
-    setOption: vi.fn(async () => undefined)
-  }
+  return startsWhenPublished(
+    {
+      acquire,
+      closeSession,
+      releaseAcquisition: vi.fn(async () => true),
+      dispatch,
+      cancelTurn: vi.fn(async () => ({ cancelled: false })),
+      answerPrompt: vi.fn(async () => undefined),
+      setOption: vi.fn(async () => undefined)
+    },
+    () => host
+  )
 }
 
 function openHost(
@@ -220,6 +224,7 @@ beforeEach(async () => {
   acquire = vi.fn(async ({ fence, spawnToken, events }) => {
     sink = events ?? null
     return {
+      providerChildPhase: 'starting' as const,
       process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
       acquisitionGeneration: `generation-${++generation}`,
       link: {
@@ -738,12 +743,11 @@ describe('an unexpected provider exit', () => {
     expect(hostErrors).toContainEqual(expect.objectContaining({ message: 'journal failed' }))
     const history = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(history.ok && history.page.submissions[0]?.dispatchState).toBe('unknown')
-    // A send whose delivery outcome is unknown IS work in progress, so the reassuring outcome is
-    // written — its failure fact beside it, and never the old bare `Provider exited: <reason>` row.
+    // Raw doubt alone is not evidence that the exited child still held the input.
     const statuses = history.ok
       ? history.page.items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
       : []
-    expect(statuses).toEqual([UNEXPECTED_PROVIDER_EXIT_OUTCOME])
+    expect(statuses).toEqual([])
     expect(statuses.some((text) => text.startsWith('Provider exited'))).toBe(false)
 
     dispatch.mockResolvedValueOnce({

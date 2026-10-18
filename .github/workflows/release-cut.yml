@@ -14,8 +14,8 @@ name: Cut Release
 #      semver within a channel, so a regressing "latest" is the one thing
 #      that breaks auto-update for fresh installs.
 #   5. Write package.json, commit (detached), tag, push tag.
-#   6. If ref was the tip of origin/main, fast-forward main to include the
-#      version-bump commit so developers see the right version locally.
+#   6. If ref was the tip of origin/main, try to fast-forward its version;
+#      a pull-request-only rule leaves main unchanged and still pushes the tag.
 #   7. Build and publish artifacts from the tag.
 
 on:
@@ -779,13 +779,18 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PUSH_MAIN" == "true" ]]; then
-            # Fast-forward main to include the version-bump commit.
-            git push origin "HEAD:refs/heads/main"
-            git push origin "$TAG"
-          else
-            # Off-main release — only the tag is published; main is untouched.
-            git push origin "$TAG"
+            push_log="$RUNNER_TEMP/release-push-main.log"
+            if git push origin "HEAD:refs/heads/main" >"$push_log" 2>&1; then
+              cat "$push_log"
+            elif grep -Fq 'GH013' "$push_log" && grep -Fq 'Changes must be made through a pull request.' "$push_log"; then
+              cat "$push_log"
+              echo "::notice::Main requires pull requests; leaving its version unchanged and publishing only $TAG."
+            else
+              cat "$push_log"
+              exit 1
+            fi
           fi
+          git push origin "$TAG"
 
       # Why: a patch cut from a base older than #24155 has no orcad template to build or ship.
       - name: Detect whether the tag ships the orcad template
@@ -2336,6 +2341,11 @@ jobs:
     permissions:
       actions: write
       contents: read
+    outputs:
+      run_id: ${{ steps.dispatch.outputs.run_id }}
+      workflow_sha: ${{ steps.dispatch.outputs.workflow_sha }}
+      run_attempt: ${{ steps.dispatch.outputs.run_attempt }}
+      wait_deadline_ms: ${{ steps.dispatch.outputs.wait_deadline_ms }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -2346,7 +2356,8 @@ jobs:
           node-version-file: package.json
 
       - name: Run isolated macOS release build
-        run: node config/scripts/run-release-mac-build-workflow.mjs
+        id: dispatch
+        run: node config/scripts/run-release-mac-build-workflow.mjs dispatch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
@@ -2355,11 +2366,50 @@ jobs:
           RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
           RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
 
+  verify-mac-build:
+    needs:
+      - cut
+      - build-mac
+      - build
+    # Qualify macOS even when a sibling build fails; publication still requires every build.
+    if: >-
+      !cancelled() &&
+      needs.cut.result == 'success' &&
+      needs.cut.outputs.should_release == 'true' &&
+      needs.build-mac.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Require the exact isolated macOS release build to succeed
+        run: node config/scripts/run-release-mac-build-workflow.mjs wait
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
+          RELEASE_MAC_BUILD_RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_MAC_BUILD_RUN_ID: ${{ needs.build-mac.outputs.run_id }}
+          RELEASE_MAC_BUILD_WORKFLOW_SHA: ${{ needs.build-mac.outputs.workflow_sha }}
+          RELEASE_MAC_BUILD_RUN_ATTEMPT: ${{ needs.build-mac.outputs.run_attempt }}
+          RELEASE_MAC_BUILD_WAIT_DEADLINE_MS: ${{ needs.build-mac.outputs.wait_deadline_ms }}
+          RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
+
   publish-release:
     needs:
       - cut
       - build
       - build-mac
+      - verify-mac-build
       - skill-sharing-linux-floor-release-gate
       - skill-sharing-release-gate
       - terminal-rendering-golden
@@ -2369,6 +2419,7 @@ jobs:
       needs.cut.result == 'success' &&
       needs.build.result == 'success' &&
       needs.build-mac.result == 'success' &&
+      needs.verify-mac-build.result == 'success' &&
       needs.skill-sharing-linux-floor-release-gate.result == 'success' &&
       needs.skill-sharing-release-gate.result == 'success' &&
       needs.terminal-rendering-golden.result == 'success'

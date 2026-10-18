@@ -55,8 +55,9 @@ export type AgentJournalDispatchRejection = {
   rejection: SubmissionRejectionFact
 }
 
-/** `row`: a status row, about the chat. `rejection`: a rejected message's reason, about it. */
-export type AgentSessionFailureSurface = 'row' | 'rejection'
+/** `row`: a status row, about the chat. `rejection`: a rejected message's reason, about it.
+ *  `answer`: a refused answer to an approval or question, about it. */
+export type AgentSessionFailureSurface = 'row' | 'rejection' | 'answer'
 
 export type AgentSessionFailureWordsContext = {
   /** The chat's agent, when the writer knows it. */
@@ -86,6 +87,11 @@ type Sentence = (
 
 function agent(say: AgentSessionFailureSay, { agentName }: AgentSessionFailureWordsContext) {
   return { agent: agentName ?? say('theAgent') }
+}
+
+/** A sentence whose only value is the agent's name. */
+function namingAgent(id: AgentSessionFailureCopyId): Sentence {
+  return (context, _fact, _surface, say) => say(id, agent(say, context))
 }
 
 function quotingPersonDetail(
@@ -200,13 +206,13 @@ const FAILURE_SENTENCES = {
   historyTooLarge: (_context, _fact, _surface, say) =>
     joinSentences([say('historyTooLarge'), say('startNewChat')]),
   managedAccountEnvOverride: (_context, _fact, _surface, say) => say('managedAccountEnvOverride'),
-  accountSwitchInProgress: (_context, _fact, _surface, say) => say('accountSwitchInProgress'),
+  accountSwitchInProgress: namingAgent('accountSwitchInProgress'),
   launchFolderMissing: (_context, _fact, _surface, say) => say('launchFolderMissing'),
   historyInOtherAccount: (_context, _fact, _surface, say) => say('historyInOtherAccount'),
   claudeAccountFolderMissing: (_context, _fact, _surface, say) => say('claudeAccountFolderMissing'),
   claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
-  agentCommandNotRunnable: (context, _fact, _surface, say) =>
-    say('agentCommandNotRunnable', agent(say, context)),
+  agentCommandNotRunnable: namingAgent('agentCommandNotRunnable'),
+  runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
   managedAccountUnsupported: (context, _fact, _surface, say) =>
     joinSentences([
       say('managedAccountUnsupported'),
@@ -217,7 +223,14 @@ const FAILURE_SENTENCES = {
           : say('chooseClaudeAccountThenSend')
     ]),
   providerExited: (context, _fact, surface, say) =>
-    say(surface === 'row' ? 'providerExitedRow' : 'providerExitedRejection', agent(say, context)),
+    say(
+      surface === 'row'
+        ? 'providerExitedRow'
+        : surface === 'answer'
+          ? 'providerExitedAnswer'
+          : 'providerExitedRejection',
+      agent(say, context)
+    ),
   restartFailed: couldNot('couldNotRestart'),
   providerRejected: (context, fact, _surface, say) =>
     quotingPersonDetail(
@@ -233,6 +246,7 @@ const FAILURE_SENTENCES = {
       : say('attachmentInvalid'),
   attachmentUnreadable: (_context, _fact, _surface, say) => say('attachmentUnreadable'),
   emptyMessage: (_context, _fact, _surface, say) => say('emptyMessage'),
+  commandUnavailable: namingAgent('commandUnavailable'),
   queueFull: (_context, _fact, _surface, say) => say('queueFull'),
   writeFailed: (_context, _fact, _surface, say) => say('writeFailed'),
   cancelled: (_context, _fact, _surface, say) => say('cancelled'),
@@ -281,10 +295,8 @@ const FAILURE_SENTENCES = {
           retry?.cause
         )
       : providerRetryWords(say, agent(say, context), retry),
-  previousExitUnverifiable: (context, _fact, _surface, say) =>
-    say('previousExitUnverifiable', agent(say, context)),
-  sessionNotRestored: (context, _fact, _surface, say) =>
-    say('sessionNotRestored', agent(say, context))
+  previousExitUnverifiable: namingAgent('previousExitUnverifiable'),
+  sessionNotRestored: namingAgent('sessionNotRestored')
 } satisfies Record<AgentSessionFailureKind, Sentence>
 
 /** The sentence a person reads for this fact on this surface; never a marker. */

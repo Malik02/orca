@@ -24,7 +24,12 @@ import {
 } from '../../../shared/agent-session-wire'
 import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
+import {
+  contextStructuredAgentSessionCurrentWork,
+  type StructuredAgentSessionCurrentWork
+} from './structured-agent-session-current-work'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { whileStructuredAgentSessionHandingOver } from './structured-agent-session-handing-over'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type {
   AgentSessionDispatchOutcome,
@@ -55,6 +60,9 @@ export type AgentSessionTurnContext = {
   sessionId: string
   journal: AgentSessionJournal
   fence: number
+  /** The host's projection of what work is current (`structuredAgentSessionCurrentWork`), read
+   *  fresh per call: a child's end can move it mid-operation. */
+  currentWork?: () => StructuredAgentSessionCurrentWork | null
   adapter: StructuredAgentSessionAdapter
   /** What each agent declares; the session's own answer is `agents.capabilities(agent)`. */
   agents: StructuredAgentRegistry
@@ -164,7 +172,7 @@ export async function performSend(
   if (existing) {
     return {
       ok: true,
-      value: { clientMessageId: input.clientMessageId, submission: existing }
+      value: { clientMessageId: input.clientMessageId, submission: { ...existing } }
     }
   }
   try {
@@ -206,7 +214,10 @@ export async function performSend(
   }
 }
 
-export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverContext
+export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverContext & {
+  /** What is current changed with no row (`publishGenerationEnded`). */
+  workChanged?: () => void
+}
 
 /**
  * Hands one queued submission to the provider. The `dispatch{pending}` row goes first: a crash
@@ -227,32 +238,47 @@ export async function handOverSubmission(
     })
     return
   }
-  if (body.command) {
-    await handOverStructuredAgentSessionCommand(ctx, submission, body)
-    return
-  }
-  // The message joins the turn running at handover, a steer, or opens its own. A new turn carries
-  // the stopped messages owed to the agent, named on this same row before anything is written.
-  const carried = carriedStoppedHistory(ctx, submission, body)
-  await ctx.journal.resolveDispatch({
+  await whileStructuredAgentSessionHandingOver(
+    ctx.journal,
     clientMessageId,
-    state: 'pending',
-    fence: ctx.fence,
-    turnScope: ctx.journal.liveTurnScope(),
-    ...(carried ? { carries: carried.covers } : {})
-  })
-  // The handover row's instant on the host clock; the turn this dispatch opens records it so the
-  // live counter never re-anchors at turn-open.
-  const outcome = await dispatchSafely(
-    ctx,
-    clientMessageId,
-    carried ? withStoppedHistory(body, carried.messages) : body,
-    structuredAgentSessionHandoverOrigin(ctx.journal, submission)
+    async (released) => {
+      if (body.command) {
+        await handOverStructuredAgentSessionCommand(ctx, submission, body)
+        return
+      }
+      // Join only the live child's turn; a new turn carries the stopped history on its first row.
+      const turnScope = contextStructuredAgentSessionCurrentWork(ctx).turnScope()
+      const carried = carriedStoppedHistory(ctx, turnScope, submission, body)
+      await ctx.journal.resolveDispatch({
+        clientMessageId,
+        state: 'pending',
+        fence: ctx.fence,
+        turnScope,
+        ...(carried ? { carries: carried.covers } : {})
+      })
+      const outcome = await dispatchSafely(
+        ctx,
+        clientMessageId,
+        carried ? withStoppedHistory(body, carried.messages) : body,
+        structuredAgentSessionHandoverOrigin(ctx.journal, submission)
+      )
+      // An admission needs no dispatch row: the submission is already pending, and from here the
+      // child's own report says whether it still holds it. Any other outcome's row says so.
+      if (outcome.state === 'admitted') {
+        released()
+        return
+      }
+      await resolveHandoverOutcome(ctx, clientMessageId, outcome)
+    },
+    ctx.workChanged
   )
-  // An admission needs no dispatch row: the submission is already pending.
-  if (outcome.state === 'admitted') {
-    return
-  }
+}
+
+async function resolveHandoverOutcome(
+  ctx: AgentSessionHandoverContext,
+  clientMessageId: string,
+  outcome: Exclude<AgentSessionDispatchOutcome, { state: 'admitted' }>
+): Promise<void> {
   try {
     await ctx.journal.resolveDispatch(
       outcome.state === 'accepted'
@@ -300,5 +326,6 @@ function requireSubmission(
   if (!submission) {
     throw new Error('agent_session_submission_lost')
   }
-  return submission
+  // The answer as of this step: the journal settles its own row in place afterwards.
+  return { ...submission }
 }

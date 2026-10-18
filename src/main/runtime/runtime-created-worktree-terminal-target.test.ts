@@ -5,7 +5,7 @@ import { Store } from '../persistence/loading-store/store'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { RuntimeRemoteFetchController } from './runtime-remote-fetch-controller'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
-import type { OrcaRuntimeWithNotifySshStateChanged } from './orca-runtime-notify-ssh-state-changed'
+import type { OrcaRuntimeWithNotifySshStateChanged } from './workspaces/workspace-host-notifications'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { PreparationRearmHolder } from '../worktree-create-preparation'
 import type { RuntimeWorkspaceCreateEvents } from '../workspace-create-telemetry'
@@ -394,7 +394,17 @@ describe('workspace activation and metadata reentry', () => {
     )
     expect(notify.mock.calls).toEqual([
       ['repo'],
-      ['repo', { invalidateGitScans: false, sortOrderOnly: true }]
+      [
+        'repo',
+        {
+          invalidateGitScans: false,
+          sortOrderOnly: true,
+          sortOrders: [
+            { worktreeId: runtime.selectedWorktree.id, sortOrder: expect.any(Number) },
+            { worktreeId: otherId, sortOrder: expect.any(Number) }
+          ]
+        }
+      ]
     ])
   })
 

@@ -143,6 +143,8 @@ async function createHost(name: string, partition: string, nativeControl = false
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Hidden popup probes still need compositor frames for real CDP input.
+      backgroundThrottling: false,
       webviewTag: true
     }
   })
@@ -286,6 +288,8 @@ async function run(): Promise<void> {
       writeStatus()
     }
   })
+  // Playwright must attach before Electron changes guest targets from pages to webviews.
+  await fetch(`${fixtureOrigin}/fixture-cdp-connected`)
   await createHost('local', localPartition)
   phase = 'local'
   writeStatus()

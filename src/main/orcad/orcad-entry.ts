@@ -10,19 +10,25 @@
  * the runtime factory, but only when an Electron serve sidecar or an operator-supplied
  * Chromium proves available at startup.
  */
+import { join } from 'node:path'
 import process from 'node:process'
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { resolveOrcadInstallRoot, resolveUserDataPath } from './orcad-app-paths'
 import { prepareOrcadCliLauncher } from './orcad-cli-launcher'
-import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-adapters'
+import {
+  installOrcadHostAdapters,
+  prepareOrcadSecretStore,
+  runOrcadQuitHandlers
+} from './orcad-host-adapters'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import {
   flushOrcadProfileStoreForShutdown,
   installOrcadShutdownSignals,
-  startOrcadWithHost
+  startOrcadWithHost,
+  type OrcadShutdownTrigger
 } from './orcad-lifecycle'
-import { ORCAD_USAGE, parseArgs } from './orcad-command-arguments'
+import { ORCAD_USAGE, parseArgs, resolveOrcadWebClientRoot } from './orcad-command-arguments'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 import { installOrcadStopRequestListeners } from './orcad-stop-request-listener'
 import { prepareOrcadManagedStop } from './orcad-managed-stop-admission'
@@ -35,6 +41,8 @@ import {
 } from '../../shared/ai-vault-search-settings'
 import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
 import { adoptWslHostLoginEnvironment } from './orcad-wsl-host-login-environment'
+import { installOrcadProcessErrorGuards } from './orcad-process-error-guards'
+import { orcadWsPortOptions } from './orcad-ws-port-policy'
 
 export { parseArgs }
 
@@ -54,6 +62,8 @@ export type OrcadOptions = {
   projectRoot?: string
   /** Literal IP to bind. Defaults to loopback; see orcad-bind-address.ts. */
   bind?: string
+  /** The browser client's directory; the slot carries none, so `orca serve` passes the app's. */
+  webClientRoot?: string
 }
 
 export type OrcadHandle = {
@@ -72,8 +82,11 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   installOrcadHostAdapters()
   // Why: an orcad started from an Orca terminal must not fence its own CLI children to that Orca.
   stampRuntimeSourceEnv(process.env, null)
+  const userDataPath = resolveUserDataPath()
+  // Why, as on the desktop: an inherited value would aim the CLI-shared Codex home paths elsewhere.
+  process.env.ORCA_USER_DATA_PATH = userDataPath
   const { readiness, instance, stop } = await startOrcadWithHost(
-    resolveUserDataPath(),
+    userDataPath,
     (registerCleanup) => startOrcadRuntime(options, registerCleanup),
     () => {
       try {
@@ -87,6 +100,18 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   )
   const version = getAppEnvironment().getVersion()
   return { readiness, managedStop: { version, runtimeId: readiness.runtimeId, instance }, stop }
+}
+
+async function prepareOrcadSecretStoreAndMigrate(userDataPath: string): Promise<void> {
+  const { getSecretStore } = await import('../../shared/secret-store')
+  const { reportSecretProtectionGap } = await import('../host/secret-protection-report')
+  const { migratePlaintextCredentials, orcadCredentialRoot } =
+    await import('./orcad-plaintext-credential-migration')
+  // Why the credential root, not userData: a disposable ORCA_USER_DATA would take the key with it.
+  if (await prepareOrcadSecretStore(orcadCredentialRoot(), userDataPath)) {
+    migratePlaintextCredentials(getSecretStore())
+  }
+  reportSecretProtectionGap({ dataFile: join(userDataPath, 'orca-data.json') })
 }
 
 async function startOrcadRuntime(
@@ -159,6 +184,8 @@ async function startOrcadRuntime(
     console.warn('[orcad] Could not prepare the profile CLI launcher', error)
   })
   const idleExitStartup = beginOrcadIdleExit(runtimeUserDataPath)
+  // Why before the profile store: it unseals protected settings as it loads.
+  await prepareOrcadSecretStoreAndMigrate(runtimeUserDataPath)
   const { store: profileStore, authority: profileStateAuthority } =
     await createOrcadProfileStateStartup(runtimeUserDataPath)
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
@@ -196,8 +223,27 @@ async function startOrcadRuntime(
     registerCleanup
   )
 
+  // Why before the runtime: its structured Codex resolvers are constructor deps.
+  const { createOrcadAccountServices } = await import('./orcad-account-services')
+  const accountLaunch = createOrcadAccountServices({
+    store: profileStore,
+    setClaudeStatusLineListener: (listener) =>
+      agentHookServer.setClaudeStatusLineListener(listener),
+    registerCleanup,
+    clientCodexHomes: codexAccountHomes
+  })
+
+  const { loadAgentSessionClaimSigner } = await import('../runtime/agent-session-claim-identity')
   const runtime = new OrcaRuntimeService(profileStore, undefined, {
-    getAdditionalAiVaultCodexHomePaths: codexAccountHomes.listSessionHomes,
+    // Why persistent: the terminal daemon outlives orcad, so a per-process key would make a
+    // restarted orcad unable to recognise (and adopt) the agent PTYs it already owns.
+    agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath),
+    getAdditionalAiVaultCodexHomePaths: () => [
+      ...codexAccountHomes.listSessionHomes(),
+      ...(accountLaunch?.listCodexSessionHomes() ?? [])
+    ],
+    // Why absent on a WSL host: a resolver overrides the desktop-pushed CODEX_HOME.
+    ...accountLaunch?.runtimeDeps,
     // Why here too: orcad serves `worktree.ps` and `agentSession.*`; unwired it lists no agents.
     ...agentHookRuntimeDeps(agentHookServer, observedPaneIdentities, () =>
       profileStore.getSettings()
@@ -224,6 +270,8 @@ async function startOrcadRuntime(
     }
   })
 
+  accountLaunch?.attachToRuntime(runtime)
+
   // Why before any launch: a desktop that owns this host's accounts pushed them on an earlier run.
   const { restoreOrcadHostAccountLaunchEnv } = await import('./orcad-host-account-launch-env-store')
   restoreOrcadHostAccountLaunchEnv(runtime, runtimeUserDataPath)
@@ -248,19 +296,25 @@ async function startOrcadRuntime(
     agentHookServer,
     () => runtime
   )
+  if (runtime.sidebarFacts) {
+    registerCleanup(runtime.sidebarFacts.attachSidebarAgentStatusStore(agentHookServer))
+  }
 
   // Why the headless entry point rather than registerPtyHandlers directly: this is the
   // same call `--serve` makes, and it threads the store through. Without the store the
   // handlers install fine and every terminal.create then fails at persistence time.
   //
-  // Claude-auth preparation is left unset: account selection is the client's, which sends the
-  // prepared account env. Codex only needs this host's hook put into that env's home.
+  // A client-sent Codex account home wins; otherwise this host's own selection applies. A WSL host
+  // has none: its desktop sends the prepared account env.
   await registerHeadlessPtyRuntime(
     runtime,
-    codexAccountHomes.selectLaunchHome,
+    async (target, launchEnv, context) =>
+      (await codexAccountHomes.selectLaunchHome(target, launchEnv, context)) ??
+      (accountLaunch ? accountLaunch.prepareCodexHome(target, launchEnv, context) : null),
     () => profileStore.getSettings(),
-    undefined,
-    profileStore
+    accountLaunch?.prepareClaudeAuth,
+    profileStore,
+    accountLaunch?.prepareCodexSessionResume
   )
 
   // Why: same post-registration reconciliation `--serve` performs. Skipping it leaves
@@ -270,6 +324,8 @@ async function startOrcadRuntime(
 
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
+  // Hook rows hydrated and the PTY runtime registered: stored sort tiers can be checked.
+  void runtime.sidebarFacts?.reconcileSortStampTiers(getLocalPtyProvider())
 
   // Runs after RPC stops (cleanups run reversed); later records save synchronously until exit.
   registerCleanup(() => runtime.closeNotificationDismissals())
@@ -281,6 +337,10 @@ async function startOrcadRuntime(
   // Why before the RPC server binds: like `--serve`, the first client must find a ready graph.
   const { publishHeadlessRuntimeGraph } = await import('../runtime/headless-runtime-graph')
   publishHeadlessRuntimeGraph(runtime)
+  // Store load skipped moved shell history: only the runtime can tell which worktrees run a shell.
+  void runtime.installPendingOrcadMigrationShellHistory().catch((error: unknown) => {
+    console.error('[orcad-migration] installing pending shell history failed:', error)
+  })
 
   const bindHost = resolveOrcadBindHost(options.bind)
   const rpc = new OrcaRuntimeRpcServer({
@@ -292,7 +352,8 @@ async function startOrcadRuntime(
     // once a device has connected, so a loopback deployment would silently go wide one
     // restart after its first client paired.
     pinnedBindHost: bindHost,
-    ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
+    webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
+    ...orcadWsPortOptions(options.port)
   })
   // Stops first: no RPC may write while the rest of the runtime is torn down.
   registerCleanup(() => rpc.stop())
@@ -337,8 +398,12 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     console.log(ORCAD_USAGE)
     return
   }
+  let shutdownTrigger: OrcadShutdownTrigger | null = null
+  // Before startup: its fire-and-forget chains can reject before the first await settles.
+  installOrcadProcessErrorGuards(() => shutdownTrigger)
   const startup = startOrcad(options)
   const requestShutdown = installOrcadShutdownSignals(async () => (await startup).stop())
+  shutdownTrigger = requestShutdown
   const handle = await startup
   // Why after startup: a managed request must name the runtime and instance this run became.
   installOrcadStopRequestListeners(() => requestShutdown('stop request'), {

@@ -14,7 +14,6 @@ const EXPECTED_MATRIX = {
   '.github/workflows/e2e.yml#orcad-serve-mode-switch': { contents: 'read' },
   '.github/workflows/e2e.yml#orcad-serve-mode-switch-windows': { contents: 'read' },
   '.github/workflows/e2e.yml#orcad-ssh-docker': { contents: 'read' },
-  '.github/workflows/e2e.yml#prepare-native-cache': { contents: 'read' },
   '.github/workflows/e2e.yml#ssh-browser-network-route': { contents: 'read' },
   '.github/workflows/homebrew-bump.yml#bump-cask': { contents: 'read' },
   '.github/workflows/node-server-tests.yml#changes': { contents: 'read' },
@@ -22,10 +21,12 @@ const EXPECTED_MATRIX = {
   '.github/workflows/node-server-tests.yml#linux_glibc217_compat': { contents: 'read' },
   '.github/workflows/node-server-tests.yml#linux_glibc_floor': { contents: 'read' },
   '.github/workflows/node-server-tests.yml#linux_musl': { contents: 'read' },
+  '.github/workflows/node-server-tests.yml#mobile_web_bundle': { contents: 'read' },
   '.github/workflows/node-server-tests.yml#persistence': { contents: 'read' },
   '.github/workflows/release-mac-build.yml#build-mac': { actions: 'read', contents: 'write' },
   [`${RELEASE_WORKFLOW}#build`]: { actions: 'read', contents: 'write' },
   [`${RELEASE_WORKFLOW}#build-mac`]: { actions: 'write', contents: 'read' },
+  [`${RELEASE_WORKFLOW}#verify-mac-build`]: { actions: 'read', contents: 'read' },
   [`${RELEASE_WORKFLOW}#create-release`]: { contents: 'write' },
   [`${RELEASE_WORKFLOW}#cut`]: { contents: 'write' },
   [`${RELEASE_WORKFLOW}#docs-production-dispatch`]: { actions: 'write' },
@@ -57,6 +58,10 @@ const EXPECTED_MATRIX = {
   [`${RELEASE_WORKFLOW}#orcad-template -> .github/workflows/node-server-tests.yml#linux_musl`]: {
     contents: 'read'
   },
+  [`${RELEASE_WORKFLOW}#orcad-template -> .github/workflows/node-server-tests.yml#mobile_web_bundle`]:
+    {
+      contents: 'read'
+    },
   [`${RELEASE_WORKFLOW}#orcad-template -> .github/workflows/node-server-tests.yml#persistence`]: {
     contents: 'read'
   },

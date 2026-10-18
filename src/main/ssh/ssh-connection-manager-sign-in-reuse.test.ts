@@ -3,9 +3,9 @@ import {
   clientInstances,
   emitSshEvent,
   eventHandlers,
-  resetSshConnectionMocks,
   ssh2Mock
-} from './ssh-connection-test-harness'
+} from './__tests__/ssh-connection-test-client'
+import { resetSshConnectionMocks } from './ssh-connection-test-harness'
 import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
 import { SshConnectionManager } from './ssh-connection-manager'
 import {
@@ -13,18 +13,38 @@ import {
   resetSshCredentialDeclinesForTests
 } from './ssh-credential-decline'
 
-vi.mock('ssh2', async () => (await import('./ssh-connection-test-harness')).createSsh2Module())
-vi.mock('./system-ssh-binary', async () =>
+vi.mock('ssh2', async () =>
+  (await import('./__tests__/ssh-connection-test-client')).createSsh2Module()
+)
+vi.mock('./system-transport/system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
-vi.mock('./ssh-system-fallback', async () =>
-  (await import('./ssh-connection-test-harness')).createSystemFallbackModule()
+vi.mock('./system-transport/system-ssh-args', async (importOriginal) =>
+  (await import('./ssh-connection-test-harness')).withSystemSshArgsMocks(await importOriginal())
+)
+vi.mock('./system-transport/system-ssh-command', async (importOriginal) =>
+  (await import('./ssh-connection-test-harness')).withSystemSshCommandMocks(await importOriginal())
+)
+vi.mock('./system-transport/system-ssh-file-binary-transfer', async (importOriginal) =>
+  (await import('./ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+    await importOriginal()
+  )
+)
+vi.mock('./system-transport/system-ssh-file-transfer', async (importOriginal) =>
+  (await import('./ssh-connection-test-harness')).withSystemSshFileTransferMocks(
+    await importOriginal()
+  )
 )
 vi.mock('./ssh-control-socket', async () =>
   (await import('./ssh-connection-test-harness')).createControlSocketModule()
 )
-vi.mock('./ssh-config-parser', async () =>
+vi.mock('./config/ssh-config-parser', async () =>
   (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
+)
+vi.mock('./config/ssh-g-config-resolution', async (importOriginal) =>
+  (await import('./ssh-connection-test-harness')).withSshGConfigResolutionMocks(
+    await importOriginal()
+  )
 )
 
 const authFailure = (): Error => new Error('All configured authentication methods failed')
@@ -119,6 +139,9 @@ describe('SshConnectionManager on a password host', () => {
     onCredentialRequest.mockImplementationOnce(() => new Promise(() => {}))
     emitSshEvent('keyboard-interactive', '', '', '', passwordPrompt, vi.fn())
     await vi.waitFor(() => expect(onCredentialRequest).toHaveBeenCalledTimes(2))
+    // A background dial may not close the dialog the user is answering.
+    await expect(manager.connect(createTarget())).rejects.toThrow('already in progress')
+    await manager.disconnectConnection('target-1', manager.getConnection('target-1')!)
 
     ssh2Mock.connectSequence = [authFailure(), 'ready']
     await manager.connect(createTarget())

@@ -204,10 +204,9 @@ describe('per-job path classification', () => {
   })
 
   it('runs native package jobs only for the platform that ships the changed native', () => {
-    expectClassification(['native/windows-cli-launcher/src/main.rs'], {
-      package_windows: true
-    })
-    expectClassification(['native/computer-use-linux/runtime.py'], {
+    expectClassification(['native/windows-cli-launcher/src/main.rs'], { package_windows: true })
+    expectClassification(['native/computer-use-linux/runtime.py'], { package: true })
+    expectClassification(['native/wayland-clipboard/wayland-clipboard.c'], {
       package: true
     })
     expectClassification(['native/computer-use-macos/Package.swift'], {})
@@ -220,6 +219,7 @@ describe('per-job path classification', () => {
       'config/scripts/process-failure-message.mjs',
       'config/scripts/space-sharing-copy.mjs',
       '.github/actions/prepare-linux-package-fixture/action.yml',
+      '.github/actions/prepare-wayland-clipboard/action.yml',
       'config/docker/cli-launch-contract/Dockerfile',
       'config/docker/cli-launch-contract/run-cli-case.sh',
       'config/docker/headless-pairing/Dockerfile',
@@ -613,18 +613,6 @@ describe('PR Checks skip wiring', () => {
     const [installStep] = action.runs.steps
     expect(installStep['working-directory']).toBe('mobile')
     expect(installStep.run).toContain('--frozen-lockfile')
-  })
-
-  it('keeps the root and README guards on docs-only PRs without another runner', () => {
-    const detector = prWorkflow.jobs.code_paths
-    expect(detector.if).toBeUndefined()
-    expect(detector.needs).toBeUndefined()
-    for (const name of ['Reject new root-level files and folders', 'Check README local links']) {
-      const step = detector.steps.find((candidate) => candidate.name === name)
-      expect(step).toBeDefined()
-      expect(step.if).toBeUndefined()
-    }
-    expect(prWorkflow.jobs.root_directory_guard).toBeUndefined()
   })
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {

@@ -8,9 +8,8 @@ import {
 } from '@/lib/pane-manager/windows-pty-compatibility'
 import { createTerminalCommandLifecycle } from '../terminal-command-lifecycle'
 import { createPaneForegroundAgentTracker } from '../pane-foreground-agent-tracker'
-import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
+import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
-import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
@@ -157,10 +156,8 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       .then((verifiable) => dropUnlessVerifiable(verifiable === true))
       .catch(() => dropUnlessVerifiable(false))
   }
-  const isRemotePtyId = (id: string): boolean =>
-    Boolean(isRemoteExecutionHostPtyId(id) || parseAppSshPtyId(id))
   session.isForegroundTrackingAllowed = (id: string): boolean => {
-    if (isRemoteExecutionHostPtyId(id) || parseAppSshPtyId(id)) {
+    if (isRemoteExecutionHostPtyId(id)) {
       return true
     }
     if (!navigator.userAgent.includes('Windows')) {
@@ -187,14 +184,14 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     getPtyId: () => session.transport.getPtyId(),
     isTrackablePtyId: session.isForegroundTrackingAllowed,
     readForegroundProcess: (id, options) =>
-      isRemotePtyId(id)
+      isRemoteExecutionHostPtyId(id)
         ? inspectRuntimeTerminalProcess(id, options)
         : window.api.pty.getForegroundProcess(id),
     confirmForegroundProcess: (id, options) =>
-      isRemotePtyId(id)
+      isRemoteExecutionHostPtyId(id)
         ? inspectRuntimeTerminalProcess(id, options)
         : window.api.pty.confirmForegroundProcess(id),
-    isRemotePtyId,
+    isRemotePtyId: isRemoteExecutionHostPtyId,
     getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
     publish: (entry) => useAppStore.getState().setPaneForegroundAgent(session.cacheKey, entry),
     getPublishedEntry: () => useAppStore.getState().paneForegroundAgentByPaneKey[session.cacheKey],
@@ -203,11 +200,16 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       session.agentCompletionCoordinator?.observeForegroundAgentProcess(process),
     hasKnownAgentIdentity: session.paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
-      // Why: a confirmed local shell proves any hibernation record for this pane is stale;
-      // otherwise the tab resolver can repaint the exited agent from sleeping occupancy.
+      // Retire stale agent occupancy when a normal exit returns to the shell.
       const state = useAppStore.getState()
       const sleepingRecord = session.getSleepingRecordForPane(state)
-      if (sleepingRecord) {
+      const ptyId = session.transport.getPtyId()
+      const wake = session.hibernatedWakeTarget
+      // A delayed shell read can settle after exit consumes suppression; preserve only that PTY's exact wake record.
+      const isHibernationWakeRecord =
+        (ptyId && state.suppressedPtyExitIds[ptyId]) ||
+        (wake && wake.record === sleepingRecord?.record && (ptyId === null || wake.ptyId === ptyId))
+      if (sleepingRecord && !isHibernationWakeRecord) {
         session.clearSleepingRecordProviderDuplicates(state, sleepingRecord)
       }
       session.clearStaleAgentTabTitleOnConfirmedShell()

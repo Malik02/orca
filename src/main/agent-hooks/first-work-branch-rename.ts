@@ -11,7 +11,7 @@ import {
   stripConfiguredBranchPrefix
 } from '../../shared/branch-name-from-work'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
-import { computeBranchName, getConfiguredBranchPrefix } from '../ipc/worktree-logic'
+import { computeBranchName, getConfiguredBranchPrefix } from '../ipc/worktree-branch-name'
 import { gitExecFileAsync } from '../git/runner'
 import { resolveLocalGitUsername } from '../git/git-username'
 import { resolveGitRouteForHost } from '../providers/execution-host-provider-dispatch'
@@ -44,7 +44,9 @@ export type FirstWorkBranchRenameEvent = {
 }
 
 export type FirstWorkBranchRenameDeps = {
-  getSettings: () => GlobalSettings
+  getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] &
+    Parameters<typeof getConfiguredBranchPrefix>[0] &
+    Partial<Pick<GlobalSettings, 'autoRenameBranchFromWork'>>
   getRepo: (repoId: string) => Repo | undefined
   getAgentEnvResolvers: () => CommitMessageAgentEnvironmentResolvers | undefined
   /** Current sidebar display name for the worktree, if one is stored. */

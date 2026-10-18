@@ -24,13 +24,6 @@ type KnownOnMain = {
 const TRANSIENT = /\(transient\)$/
 
 export const LAYOUT_ORACLE_KNOWN_ON_MAIN: readonly KnownOnMain[] = [
-  // The in-app daemon restart keeps every pane, but nothing starts a new process in them.
-  {
-    scenario: 'live-daemon-restart',
-    check: 'marker',
-    step: 'after daemon restart',
-    cause: 'panes stay without a process after a daemon restart'
-  },
   // A headless host lists a worktree with no saved tab bar (and, after a restart, every worktree)
   // under a synthesized `headless-terminals:` group, while the layout stream names the same group
   // by its saved or minted id: same tabs and order, two group ids. One projection in PR 6.

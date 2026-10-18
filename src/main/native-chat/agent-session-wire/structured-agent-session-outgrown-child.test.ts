@@ -30,7 +30,6 @@ import type {
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionUnavailable } from '../../../shared/agent-session-availability'
 import type { JournalItemLinkageVisitor } from '../agent-session-journal/journal-store-contracts'
-import type { StructuredAgentSessionChildWorkReads } from './structured-agent-session-idle-sweep'
 
 describe('a send after the agent said it is not signed in', () => {
   let rig: RestTestRig
@@ -131,7 +130,6 @@ const conversation = (
     child?: StructuredAgentSessionProviderChild | null
     items?: Row[]
     submissions?: ReturnType<typeof rejected>[]
-    activeTurnId?: string
     newestTurnEndedAt?: number
   } = {}
 ) => {
@@ -147,7 +145,6 @@ const conversation = (
           visit(item.itemId, index, item.body, item.agentId ? { agentId: item.agentId } : {})
         ),
       itemFence: (itemId: string) => items.find((item) => item.itemId === itemId)?.fence,
-      activeTurnId: () => input.activeTurnId ?? null,
       newestTurn: (): AgentJournalTurnLifecycle | null =>
         input.newestTurnEndedAt === undefined
           ? null
@@ -201,11 +198,16 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
     stoppable: false,
     invocation: { invocationId: 'spawn-subagent-1', generation: 1 }
   }
-  const idle: StructuredAgentSessionChildWorkReads = {
+  const idle: Parameters<typeof retireOutgrownStructuredAgentSessionChild>[2]['work'] = {
+    currentWork: () => ({ activeTurnId: () => null, hasActionablePrompt: () => false }),
     childWork: () => [],
+    childWorkOpen: () => false,
     hasOpenDispatch: () => false,
     providerHoldsDispatch: () => false
   }
+  const owing = (turnId: string | null, prompt: boolean): Partial<typeof idle> => ({
+    currentWork: () => ({ activeTurnId: () => turnId, hasActionablePrompt: () => prompt })
+  })
   const signedOut = { submissions: [rejected(2)] }
   const retire = async (
     input: Parameters<typeof conversation>[0],
@@ -230,8 +232,8 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
   it('keeps it while it owes work the idle sweep also protects', async () => {
     // A pending prompt is the shared check's too; the idle sweep's tests cover that case.
     for (const kept of [
-      await retire({ ...signedOut, activeTurnId: 'turn-1' }),
-      await retire(signedOut, { childWork: () => [liveChildWork] }),
+      await retire(signedOut, owing('turn-1', false)),
+      await retire(signedOut, { childWorkOpen: () => true }),
       await retire(signedOut, { hasOpenDispatch: () => true }),
       await retire(signedOut, { providerHoldsDispatch: () => true })
     ]) {
@@ -286,9 +288,9 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
 
     it('is kept while it owes work, as a signed-out one is', async () => {
       for (const kept of [
-        await retire({ ...askChild, activeTurnId: 'turn-1' }, {}, undefined, now('auto')),
-        await retire(askChild, { childWork: () => [liveChildWork] }, undefined, now('auto')),
-        await retire({ ...askChild, items: [pendingPrompt] }, {}, undefined, now('auto'))
+        await retire(askChild, owing('turn-1', false), undefined, now('auto')),
+        await retire(askChild, { childWorkOpen: () => true }, undefined, now('auto')),
+        await retire(askChild, owing(null, true), undefined, now('auto'))
       ]) {
         expect(kept.stopAgent).not.toHaveBeenCalled()
       }
@@ -317,6 +319,7 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
           fetchedAt: 1,
           models: rows.map((row) => ({ ...row, label: row.id, efforts: [] }))
         })),
+        retainedLiveModelIds: vi.fn(async () => []),
         recordLiveListing: vi.fn(),
         prewarm: vi.fn(async () => undefined),
         stop: vi.fn(),
@@ -390,15 +393,3 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
     })
   })
 })
-
-const pendingPrompt: Row = {
-  itemId: 'approval-1',
-  fence: 2,
-  body: {
-    kind: 'approval',
-    title: 'Run a command',
-    detail: null,
-    options: [],
-    resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-  }
-}

@@ -404,6 +404,15 @@ export class ShadowSeatDirectory {
     return known && known.epoch >= epoch ? known.firstSeenAt : undefined
   }
 
+  // The newest epoch this director has seen the database name for the host, if still kept.
+  databaseEpochOf(
+    userId: string,
+    relayHostId: string
+  ): { epoch: number; firstSeenAt: number } | undefined {
+    const known = this.databaseEpochs.get(hostKey(userId, relayHostId))
+    return known ? { ...known } : undefined
+  }
+
   // Records a sighting; returns when this director first saw the host at this epoch.
   observeDatabaseEpoch(userId: string, relayHostId: string, epoch: number, now: number): number {
     const key = hostKey(userId, relayHostId)
