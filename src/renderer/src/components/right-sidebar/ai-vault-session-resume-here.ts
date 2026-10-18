@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
+import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   captureNativeChatComposerFocusIntent,
@@ -169,7 +170,13 @@ function revealInPlaceOf(
 ): Promise<void> {
   return activateAiVaultStructuredSession({ structuredSession: structured }).then(() => {
     // It also settles true after a reopen it could only report, so only a tab that exists replaces.
-    if (findChatTabWhere(here.workspaceId, (tab) => tab.entityId === structured.sessionId)) {
+    const reopened = findChatTabWhere(
+      here.workspaceId,
+      (tab) => tab.entityId === structured.sessionId
+    )
+    if (reopened) {
+      // Reveal appends to the group; take this chat's slot as a new chat does (a no-op across splits).
+      insertUnifiedTabAfterAnchor(here.workspaceId, reopened.id, here.tabId)
       closeReplacedChat(here)
     }
   })

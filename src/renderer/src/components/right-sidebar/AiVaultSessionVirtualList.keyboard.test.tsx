@@ -365,7 +365,7 @@ describe('Session History keyboard selection', () => {
     expect(order()).toEqual(['old', 'other'])
     // The closed chat that holds the row reopens in this one's place.
     await refusedBy('held')
-    expect(order()).toEqual(['other', 'held'])
+    expect(order()).toEqual(['held', 'other'])
     expect(toastError).not.toHaveBeenCalled()
     launch.settlement = { kind: 'structured', sessionId: 'new' }
   })
