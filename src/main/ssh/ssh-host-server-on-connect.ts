@@ -15,16 +15,19 @@ import type {
 } from '../../shared/orcad-managed-runtime'
 import type {
   SshManagedServerRelayReason,
+  SshManagedServerLinkedProject,
   SshManagedServerServingNote,
   SshManagedServerUpdateNote,
   SshTarget
 } from '../../shared/ssh-types'
-import type { OrcadManagedServing } from './orcad-managed-serving'
+import type { OrcadManagedServing } from '../managed-server/lifecycle/orcad-managed-serving'
 import {
   checkManagedServerUpdate,
   type ManagedServerUpdateDeps
 } from './managed-server-update-check'
 import { managedResultAfterUpdate, unservedManagedResult } from './managed-server-serving-gate'
+import { orcadMigrationConflictGuidance } from './orcad-migration-conflict-guidance'
+import { keptForBridgedTerminals, relayTerminalReason } from './ssh-host-server-bridged-unserved'
 import {
   classifyOrcadHostUnavailable,
   ORCAD_TUNNEL_UNAVAILABLE_REASON
@@ -48,6 +51,7 @@ export type HostServerOnConnectResult =
       environmentId: string
       update?: SshManagedServerUpdateNote
       serving?: SshManagedServerServingNote
+      linked?: SshManagedServerLinkedProject[]
       /** Another desktop's update held the host; recheck until it clears. Never published. */
       fenceHeld?: true
     }
@@ -58,6 +62,11 @@ export type HostServerOnConnectResult =
       detail?: string
       terminals?: number
       terminalsElsewhere?: boolean
+      canLeaveBehind?: true
+      /** A move that stopped short kept the host locked; the next connect resumes it. */
+      held?: true
+      /** COMPAT(legacy-relay-bridge): the connect stays up so the bridge serves the terminals. */
+      bridged?: true
     }
 
 export type HostServerTerminalVerdict = {
@@ -202,13 +211,14 @@ async function convertHost(
   trace: HostServerDecisionTrace,
   options: { checkTerminals: boolean }
 ): Promise<HostServerOnConnectResult> {
+  let terminals: HostServerTerminalVerdict | null = null
   try {
-    const terminals = options.checkTerminals ? await deps.relayTerminals(target) : null
+    terminals = options.checkTerminals ? await deps.relayTerminals(target) : null
     if (terminals && terminals.verdict !== 'exited' && !terminals.bridged) {
       // Why unverifiable too: loss of contact is never evidence that a relay terminal exited.
       return {
         route: 'unserved',
-        reason: terminalReason(terminals.verdict),
+        reason: relayTerminalReason(terminals.verdict),
         terminals: terminals.count,
         ...(terminals.elsewhere ? { terminalsElsewhere: true } : {})
       }
@@ -224,7 +234,9 @@ async function convertHost(
     reportHostServerConversion(deps.report, target, trace, converted)
     return await afterConversion(target, deps, converted)
   } catch (error) {
-    return setupFailed(target, deps, trace, error, false)
+    // COMPAT(legacy-relay-bridge): the terminals run on in their old tabs until they exit.
+    const failed = await setupFailed(target, deps, trace, error, false)
+    return keptForBridgedTerminals(failed, terminals, error)
   }
 }
 
@@ -238,12 +250,12 @@ function setupFailed(
   console.warn('[ssh] Managed Orca server setup failed; using the relay this session:', error)
   reportHostServerSetupError(deps.report, target, trace, error)
   const unavailable = classifyOrcadHostUnavailable(error)
+  const conflict = empty ? null : orcadMigrationConflictGuidance(error)
+  if (conflict) {
+    return unfinished(target, deps, unavailable, empty, 'refused', conflict)
+  }
   const detail = error instanceof Error ? error.message : String(error)
   return unfinished(target, deps, unavailable, empty, 'failed', detail)
-}
-
-function terminalReason(verdict: 'live' | 'unverifiable'): SshManagedServerRelayReason {
-  return verdict === 'live' ? 'relay_terminals_live' : 'relay_terminals_unverifiable'
 }
 
 async function afterDeploy(
@@ -275,14 +287,23 @@ async function afterConversion(
 ): Promise<HostServerOnConnectResult> {
   switch (result.outcome) {
     case 'converted':
-      return { route: 'managed', environmentId: result.environment.id }
+      return {
+        route: 'managed',
+        environmentId: result.environment.id,
+        ...(result.linkedProjects ? { linked: result.linkedProjects } : {})
+      }
     case 'deferred':
       return deferred(target, deps, result, false)
     case 'refused':
       if (result.code === 'orcad_migration_terminals') {
-        return { route: 'unserved', reason: terminalReason(result.verdict) }
+        return { route: 'unserved', reason: relayTerminalReason(result.verdict) }
       }
-      return { route: 'unserved', reason: 'refused', detail: result.reason }
+      return {
+        route: 'unserved',
+        reason: 'refused',
+        detail: result.reason,
+        ...(result.canLeaveBehind ? { canLeaveBehind: true } : {})
+      }
   }
 }
 
@@ -306,7 +327,7 @@ async function unfinished(
   deps: HostServerOnConnectDeps,
   unavailable: string | null,
   empty: boolean,
-  reason: 'deferred' | 'failed',
+  reason: 'deferred' | 'failed' | 'refused',
   failure: string
 ): Promise<HostServerOnConnectResult> {
   try {
@@ -315,9 +336,16 @@ async function unfinished(
     // A staged or registered destination keeps its fence; the connect reports it below.
     console.warn('[ssh] The managed Orca server setup keeps its fence:', error)
   }
+  // Why re-read: only the journal says whether the abort released the host or left it locked.
+  const held = !empty && !unavailable && deps.hasUnfinishedConversion(target)
   if (!unavailable) {
     // Shown under the SSH host, with the host's orcad.log tail when the failure carries one.
-    return { route: 'unserved', reason, detail: boundedDetail(failure) }
+    return {
+      route: 'unserved',
+      reason,
+      detail: boundedDetail(failure),
+      ...(held ? { held: true as const } : {})
+    }
   }
   deps.recordUnavailable(target, unavailable)
   return { route: 'unserved', reason: 'orcad_unavailable', detail: unavailable }

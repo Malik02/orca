@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -52,9 +53,16 @@ beforeEach(() => {
     resolveTerminalWorkspaceLaunchScope: async () => scope,
     executionOwnerSupportsAgentSessionOperation: async () => true
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callers read only the handle.
-  const create = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({ handle: 't' } as never)
-  spawned = () => create.mock.calls.map(([, opts]) => opts?.launchRuntime?.platform)
+  const launches: (string | undefined)[] = []
+  // createTerminal up to its spawn: the runtime the host planner gave each launch.
+  vi.spyOn(runtime, 'createTerminal').mockImplementation(async (selector = '', opts = {}) => {
+    const launchScope = await runtime.resolveTerminalWorkspaceLaunchScope(selector)
+    const planned = await runtime.resolveAgentTerminalCreateOptions(launchScope, opts)
+    launches.push(planned.launchRuntime?.platform)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callers read only the handle.
+    return { handle: 't' } as never
+  })
+  spawned = () => launches
 })
 afterEach(() => {
   setPlatform(original)

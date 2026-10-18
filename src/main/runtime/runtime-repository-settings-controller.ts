@@ -1,5 +1,6 @@
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { commitProvenRepoKindChange } from '../folder-repo-git-conversion'
 import type { Repo } from '../../shared/repo-types'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
@@ -7,10 +8,14 @@ import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
+const PROJECT_TERMINAL_STOP_BUDGET_MS = 10_000
+
 type RuntimeRepositorySettingsDependencies = {
   getStore: () => RuntimeStore | null
   resolveRepo: (selector: string) => Promise<Repo>
   forgetTerminalTopology: (repoId: string) => void
+  /** Optional so test doubles and older wiring keep removing without it. */
+  stopProjectTerminals?: (repo: Repo, deadline: number) => Promise<unknown>
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
@@ -91,7 +96,14 @@ export class RuntimeRepositorySettingsController {
     if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
       sanitizedUpdates.sourceControlAi = null
     }
-    const updated = store.updateRepo(repo.id, sanitizedUpdates)
+    const write = (proven: Pick<Repo, 'folderUpgradeGitRootPath'>): Repo | null => {
+      assertWslMoveRepoWritable(store, repo)
+      return store.updateRepo(repo.id, { ...sanitizedUpdates, ...proven })
+    }
+    const updated =
+      sanitizedUpdates.kind === 'git' && isFolderRepo(repo)
+        ? await commitProvenRepoKindChange(store, repo, write, true)
+        : write({})
     if (!updated) {
       throw new Error('repo_not_found')
     }
@@ -115,7 +127,21 @@ export class RuntimeRepositorySettingsController {
     const repo = await this.deps.resolveRepo(repoSelector)
     const hostId = getRepoExecutionHostId(repo)
     assertWslMoveRepoWritable(store, repo)
+    // Why here: the host owns these shells; a client only stops the workspaces it has loaded,
+    // and older clients stop none. Bounded so repo.rm still answers inside the client's timeout.
+    const deadline = Date.now() + PROJECT_TERMINAL_STOP_BUDGET_MS
+    const stopProjectTerminals = async (): Promise<void> => {
+      await this.deps.stopProjectTerminals?.(repo, deadline).catch((error: unknown) => {
+        console.warn('[runtime] failed to stop project terminals on removal', error)
+      })
+    }
+    await stopProjectTerminals()
+    // Why again: a WSL move may have fenced the project while the stop was awaited.
+    assertWslMoveRepoWritable(store, repo)
     store.removeProjectForHost(repo.id, hostId)
+    // Why again: a terminal spawned while the first stop ran is past that sweep's snapshot, and
+    // nothing can spawn into the project once it is gone.
+    await stopProjectTerminals()
     this.deps.forgetTerminalTopology(repo.id)
     this.deps.invalidateResolvedWorktrees()
     this.deps.invalidateWorktreeScan(repo.id)

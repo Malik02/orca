@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { agentLabel } from '../../../../shared/ai-vault-session-filters'
 import {
   CLI_CONVERSATION_ADOPTING_AGENTS,
   type CliConversationRowAgent
@@ -11,7 +12,14 @@ import { prepareAiVaultSessionForResume } from '@/lib/ai-vault-session-resume-pr
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import {
+  beginStructuredAgentSessionProvisionalLaunch,
+  structuredLaunchOwner
+} from '@/lib/structured-agent-session-provisional-tab'
+import { admitStructuredLaunchOnHost } from '@/lib/structured-agent-session-host-admission'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { structuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export function activateAiVaultResumeWorkspace(workspaceId: string): boolean {
   return activateAndRevealWorkspace(workspaceId) !== false
@@ -30,11 +38,14 @@ export async function resumeAiVaultSessionInNewChat(
   try {
     // Codex rows can live under a shared legacy home; the same preparation the terminal resume
     // runs re-pins them, and its result is what names the conversation the host will look for.
-    const preparedSession = await prepareAiVaultSessionForResume(session)
+    const [preparedSession, agent] = await Promise.all([
+      prepareAiVaultSessionForResume(session),
+      adoptingAgentOnHost(rowAgent, worktreeId)
+    ])
     const plan = adoptAgentSessionLaunchVerdict({
       route: 'structured-native-chat',
       requestId,
-      agent: CLI_CONVERSATION_ADOPTING_AGENTS[rowAgent],
+      agent,
       worktreeId,
       resumeFrom: { providerSessionId: preparedSession.sessionId }
     })
@@ -51,19 +62,44 @@ export async function resumeAiVaultSessionInNewChat(
     if (launch) {
       void launch.settlement.then((settlement) => {
         if (settlement.kind === 'failed' && !settlement.notified) {
-          notifyAiVaultSessionResumeInChatFailure(settlement.error)
+          notifyAiVaultSessionResumeInChatFailure(settlement.error, rowAgent)
         }
       })
     }
   } catch (error) {
-    notifyAiVaultSessionResumeInChatFailure(error)
+    notifyAiVaultSessionResumeInChatFailure(error, rowAgent)
   }
+}
+
+/** The first chat the worktree's host does not refuse to take the row over, trying them in order.
+ *  A host that cannot answer yet keeps the chat it was asked about, whose own launch reports it. */
+async function adoptingAgentOnHost(
+  rowAgent: CliConversationRowAgent,
+  worktreeId: string
+): Promise<TuiAgent> {
+  const [first, ...rest] = CLI_CONVERSATION_ADOPTING_AGENTS[rowAgent]
+  const owner = structuredLaunchOwner({ route: 'structured-native-chat' }, worktreeId)
+  const selector = toRuntimeWorktreeSelector(worktreeId)
+  let agent: TuiAgent = first
+  for (const next of rest) {
+    if (
+      !owner ||
+      (await admitStructuredLaunchOnHost(owner.target, selector, agent)).kind !== 'declined'
+    ) {
+      return agent
+    }
+    agent = next
+  }
+  return agent
 }
 
 /** The host refuses an adoption whose conversation another chat already holds, and refuses one it
  *  cannot find under any account home it recognises. Both are actionable, and neither is the
  *  generic "could not prepare" the terminal resume reports. */
-function notifyAiVaultSessionResumeInChatFailure(error: unknown): void {
+function notifyAiVaultSessionResumeInChatFailure(
+  error: unknown,
+  rowAgent: CliConversationRowAgent
+): void {
   if (hasRuntimeRpcErrorCode(error, 'agent_session_conflict')) {
     toast.error(
       translate(
@@ -73,7 +109,24 @@ function notifyAiVaultSessionResumeInChatFailure(error: unknown): void {
     )
     return
   }
-  if (hasRuntimeRpcErrorCode(error, 'agent_session_identity_required')) {
+  const failure = structuredLaunchFailure(error)
+  if (
+    failure?.code === 'agent_session_identity_required' &&
+    failure.details?.reason === 'transcriptNotFound'
+  ) {
+    toast.error(
+      translate(
+        'components.native-chat.resumeInNewChat.notSavedYet',
+        "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
+        { agent: agentLabel(rowAgent) }
+      )
+    )
+    return
+  }
+  if (
+    failure?.code === 'agent_session_identity_required' ||
+    hasRuntimeRpcErrorCode(error, 'agent_session_identity_required')
+  ) {
     toast.error(
       translate(
         'auto.components.right.sidebar.AiVaultPanel.resumeInChatTranscriptMissing',

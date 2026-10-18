@@ -1,6 +1,6 @@
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
-import { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } from '../../orca-runtime-verify-orchestration-compatibility-caller'
+import { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } from '../../orchestration/terminal-authority/verify-orchestration-compatibility-caller'
 import type { OrchestrationCompatibilityTerminalAuthority } from '../../runtime-terminal-contracts'
 import { createHash } from 'node:crypto'
 import {
@@ -30,7 +30,7 @@ import {
 } from '../../orchestration/cli-command'
 import { readOrchestrationFleetAgentStatusSnapshot } from '../../orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from '../../structured-worker-authority'
-import { isStructuredWorkerHandle } from '../../structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../../shared/structured-worker-handle'
 import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { matchesProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
 

@@ -4,7 +4,7 @@ import type { VoiceSettings } from './speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT, DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
 import { TASK_PROVIDERS } from './task-providers'
-import { getDefaultSourceControlAiSettings } from './source-control-ai'
+import { getDefaultSourceControlAiSettings } from './source-control-ai-settings'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
 import { DEFAULT_DISABLED_TUI_AGENTS } from './tui-agent-selection'
@@ -121,7 +121,6 @@ export function buildDefaultSettings(args: {
     terminalAllowOsc52Clipboard: true,
     terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true,
     claudeAgentTeamsMode: 'off',
-    setupScriptLaunchMode: 'new-tab',
     terminalScrollbackRows: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
     httpProxyUrl: '',
     httpProxyBypassRules: '',
@@ -201,8 +200,10 @@ export function buildDefaultSettings(args: {
     pluginConsents: {},
     devPluginPaths: [],
     claudeAgentTeamsDefaultDisabledMigrated: true,
+    sshRemoteCliControlExistingHostsMigrated: true,
     skipDeleteWorktreeConfirm: false,
     alwaysForceDeleteWorktrees: false,
+    alwaysForceDeletePreservedBranches: false,
     skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
     skipDeleteArtifactConfirm: false,

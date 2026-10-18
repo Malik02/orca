@@ -317,13 +317,6 @@ describe('step 5 deterministic simulation', () => {
     // A director whose map has not seen the leave yet may re-place level with the row; the
     // WRONG_CELL row read keeps that a small share (the rest are repaired by one more reconcile).
     expect(report.badFirstReseats / report.rowAheadDemotions).toBeLessThan(0.1)
-    const withoutRead = await runReservePlacementSimulation({ ...config, faults: { noWrongCellRowRead: true } })
-    process.stderr.write(
-      `row_ahead_repair ${JSON.stringify({
-        withRead: { demotions: report.rowAheadDemotions, badFirstReseats: report.badFirstReseats, perHost: report.rowAheadDemotionsPerHost },
-        withoutRead: { demotions: withoutRead.rowAheadDemotions, badFirstReseats: withoutRead.badFirstReseats, perHost: withoutRead.rowAheadDemotionsPerHost }
-      })}\n`
-    )
   }, 240_000)
 
   // Every director misses its feed polls for 150 s: each reserve cell's dead-man trips (60-120 s)

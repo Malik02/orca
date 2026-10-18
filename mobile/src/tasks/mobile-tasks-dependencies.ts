@@ -55,7 +55,7 @@ export {
 } from 'lucide-react-native'
 export type { RpcClient } from '../transport/rpc-client'
 export type { RpcSuccess } from '../transport/types'
-export { useHostClient } from '../transport/client-context'
+export { useHostClient } from '../transport/host-client-hooks'
 export {
   useLastConnectedAt,
   useRelayRecoveryStatus,
@@ -65,6 +65,7 @@ export { classifyConnection } from '../transport/connection-health'
 export { StatusDot } from '../components/StatusDot'
 export { ActionSheetModal } from '../components/ActionSheetModal'
 export { BottomDrawer } from '../components/BottomDrawer'
+export { BottomDrawerModalHost } from '../components/bottom-drawer-modal-host'
 export { ConfirmModal } from '../components/ConfirmModal'
 export { MobileMarkdown } from '../components/MobileMarkdown'
 export { MobileAgentIcon } from '../components/MobileAgentIcon'

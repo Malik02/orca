@@ -5,6 +5,7 @@ import type {
 import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
+import { claudeStartedUnechoedSend } from './claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import { settleClaudeTurnEndWaiters } from './claude-request-end-wait'
 import {
@@ -18,12 +19,7 @@ import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { adoptClaudeStructuredSpawnOptions } from './claude-structured-spawn-options'
 import { observeClaudeFastModeFacts } from './claude-structured-session-options'
-import {
-  readClaudeStartupFacts,
-  settleClaudeSessionStartup
-} from './claude-structured-session-startup'
 import { createClaudeSessionPublication } from './claude-structured-session-publication'
-import { readClaudeStructuredSessionSettings } from './claude-structured-session-acquisition-options'
 import {
   mintClaudeAcquisitionGeneration,
   type ClaudeAcquisitionRegistry,
@@ -70,12 +66,20 @@ export async function acquireClaudeSession({
   // Frames are admitted only after launch resolution proves the provider session
   // this acquisition owns. Keep the check ahead of every stateful consumer.
   const initProof = createClaudeInitProof()
-  const translator = createClaudeSessionJournalTranslator(input.events, String(input.fence), {
-    attempt,
-    initProof,
-    callbacks,
-    sessionId
-  })
+  const translator = createClaudeSessionJournalTranslator(
+    input.events,
+    String(input.fence),
+    {
+      attempt,
+      initProof,
+      callbacks,
+      sessionId
+    },
+    () =>
+      liveSession && sessions.get(sessionId) === liveSession
+        ? liveSession.backgroundTasks.goalBackgroundWork
+        : 'unverifiable'
+  )
 
   const onMessage = (message: Record<string, unknown>): void => {
     const init = readClaudeInit(message)
@@ -108,10 +112,9 @@ export async function acquireClaudeSession({
       if (message.type === 'result' && sessions.get(sessionId) === liveSession) {
         persistClaudeTurnResumePoint(sessionId, liveSession, deps)
       }
-      // The CLI's idle releases its doubted sends; a late echo still accepts one it goes on to run.
+      // The CLI's idle wakes whatever waits for its turn to end.
       if (claudeSessionStateEndsTurn(message) && sessions.get(sessionId) === liveSession) {
         settleClaudeTurnEndWaiters(liveSession)
-        deps.onSessionIdle?.({ sessionId })
       }
     }
     // Settled after the turn this echo opens is emitted: a send read as answered before its turn
@@ -127,6 +130,7 @@ export async function acquireClaudeSession({
     const observedAt =
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     const requestedAt = turnOrigin?.requestedAt
+    const startedSend = !startsTurn && liveSession ? claudeStartedUnechoedSend(liveSession) : null
     callbacks.deliver(attempt, sessionId, () =>
       callbacks.emit(liveSession, input.events, {
         type: 'message',
@@ -135,6 +139,7 @@ export async function acquireClaudeSession({
         ...(startsTurn ? { startsTurn: true } : {}),
         ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
         ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
+        ...(startedSend ? { startedSend } : {}),
         ...observedAt
       })
     )
@@ -243,6 +248,12 @@ export async function acquireClaudeSession({
       process,
       acquisitionGeneration: mintClaudeAcquisitionGeneration(deps),
       options: launch.savedOptions.options,
+      initialization: {
+        proof: initProof,
+        account: launch.account,
+        resumesTranscript: launch.resumesTranscript,
+        onLateRefusal: (error) => callbacks.handleExit(sessionId, attempt, error)
+      },
       ...(deps.mintLinkId ? { linkId: deps.mintLinkId() } : {}),
       observedAt: deps.now?.() ?? Date.now()
     })
@@ -257,37 +268,6 @@ export async function acquireClaudeSession({
         event()
       }
     })
-    // Whichever comes first: the start landing or faulting, or the child being ended.
-    session.startup.settled = Promise.race([
-      session.startup.settled,
-      settleClaudeSessionStartup({
-        session,
-        facts: readClaudeStartupFacts({
-          account: launch.account,
-          connection,
-          initProof,
-          sessionId,
-          providerSessionId: launch.providerSessionId,
-          startup: session.startup,
-          resumesTranscript: launch.resumesTranscript,
-          requestTimeoutMs: deps.requestTimeoutMs,
-          emit
-        }),
-        readSettings: () => readClaudeStructuredSessionSettings(connection, deps.requestTimeoutMs),
-        isCurrent: () => sessions.get(sessionId) === session,
-        fault: (error) => callbacks.handleExit(sessionId, attempt, error),
-        diagnose: (diagnostic) => emit({ type: 'auth-diagnostic', sessionId, diagnostic }),
-        // The host's minted attempt always carries it; only adapter tests that pass less omit it.
-        optionRevision: () => input.optionRevision?.() ?? 0,
-        report: (event) =>
-          emit({
-            ...event,
-            sessionId,
-            fence: input.fence,
-            acquisitionGeneration: session.acquisitionGeneration
-          })
-      })
-    ])
     // A child whose exit already reached `handleExit` is not handed over as live: the create
     // fails with the CLI's own diagnostic, as one that died before publish does.
     if (sessions.get(sessionId) !== session) {
@@ -295,7 +275,7 @@ export async function acquireClaudeSession({
         exits.get(sessionId)?.error ?? new Error('claude session ended before acquisition returned')
       )
     }
-    // The start reads its facts only after publish, so the child is `starting` until `started`.
+    // The host calls open after publication and holds input until it settles.
     return { ...publication.acquisition, providerChildPhase: 'starting' }
   } catch (error) {
     unbindReadingControl?.()

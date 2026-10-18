@@ -24,6 +24,8 @@ export const RESERVE_STICKY_RECENT_MS = 10 * 60_000
 // A starting director waits this long for every live cell before it answers.
 export const RESERVE_STARTUP_GATE_MS = 30_000
 const SUMMARY_INTERVAL_MS = 60_000
+// A dry-run `full` while the map showed more free room than this share of the ceiling is `fullWithRoom`.
+export const RESERVE_DRY_RUN_ROOM_BOUND = 0.01
 // A leaver for these reasons was moved off its cell; it is not sent back there.
 const NO_REJOIN_CLOSE_CODES: ReadonlySet<number> = new Set([
   RELAY_CLOSE_CODE.DRAINING,
@@ -342,13 +344,23 @@ export class ReserveAssignment {
     const cell = this.input.placer.pick(placements, region, new Set())
     const target = cell && this.input.cells().find((entry) => entry.cellId === cell.cellId)
     if (!target) return null
+    // The map's free room at pick time; pick only returns a cell with a ceiling.
+    const freeShare = cell.ceiling ? this.input.placer.free(cell) / cell.ceiling : 0
     const startedAt = performance.now()
     void this.input.client
       .reserve(target, { ...identity, epoch: 1, ttlMs: CELL_RESERVE_TTL_MS }, true)
       .then((answer) => {
         const elapsedMs = performance.now() - startedAt
-        this.summary.dryRun.outcomes[answer.outcome] = (this.summary.dryRun.outcomes[answer.outcome] ?? 0) + 1
-        this.summary.dryRun.latenciesMs.push(elapsedMs)
+        const { dryRun } = this.summary
+        dryRun.outcomes[answer.outcome] = (dryRun.outcomes[answer.outcome] ?? 0) + 1
+        dryRun.latenciesMs.push(elapsedMs)
+        const perCell = dryRun.cells[cell.cellId] ?? { outcomes: {}, fullWithRoom: 0, minFullFreeShare: null }
+        dryRun.cells[cell.cellId] = perCell
+        perCell.outcomes[answer.outcome] = (perCell.outcomes[answer.outcome] ?? 0) + 1
+        if (answer.outcome === 'full') {
+          if (freeShare > RESERVE_DRY_RUN_ROOM_BOUND) perCell.fullWithRoom += 1
+          perCell.minFullFreeShare = Math.min(perCell.minFullFreeShare ?? 1, freeShare)
+        }
       })
       .catch(() => undefined)
     return null
@@ -429,7 +441,7 @@ export class ReserveAssignment {
     const now = this.now()
     if (now - this.summaryAt < SUMMARY_INTERVAL_MS) return
     this.summaryAt = now
-    const { latenciesMs, outcomes } = this.summary.dryRun
+    const { latenciesMs, outcomes, cells } = this.summary.dryRun
     latenciesMs.sort((left, right) => left - right)
     const percentile = (share: number) =>
       latenciesMs.length === 0
@@ -440,7 +452,7 @@ export class ReserveAssignment {
         event: 'orca_relay_reserve_placement_summary',
         mode: this.input.mode,
         ...this.summary,
-        dryRun: { outcomes, count: latenciesMs.length, p50Ms: percentile(0.5), p99Ms: percentile(0.99) }
+        dryRun: { outcomes, count: latenciesMs.length, p50Ms: percentile(0.5), p99Ms: percentile(0.99), cells }
       })
     )
     this.summary = emptySummary()
@@ -456,7 +468,19 @@ type PlacementSummary = {
   supersedes: number
   outcomes: Record<string, number>
   retries: { mapIncomplete: number; database: number; paced: number }
-  dryRun: { outcomes: Record<string, number>; latenciesMs: number[] }
+  dryRun: {
+    outcomes: Record<string, number>
+    latenciesMs: number[]
+    // Keyed by the picked cell, so bounded by the fleet.
+    cells: Record<string, DryRunCellSummary>
+  }
+}
+
+type DryRunCellSummary = {
+  outcomes: Record<string, number>
+  fullWithRoom: number
+  // Lowest map free share (of the ceiling) among this cell's `full` refusals.
+  minFullFreeShare: number | null
 }
 
 function emptySummary(): PlacementSummary {
@@ -469,6 +493,6 @@ function emptySummary(): PlacementSummary {
     supersedes: 0,
     outcomes: {},
     retries: { mapIncomplete: 0, database: 0, paced: 0 },
-    dryRun: { outcomes: {}, latenciesMs: [] }
+    dryRun: { outcomes: {}, latenciesMs: [], cells: Object.create(null) }
   }
 }

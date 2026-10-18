@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type {
@@ -28,6 +29,7 @@ import type {
   AgentModelCatalogStore
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { NativeChatVisualsLaunch } from '../native-chat/native-chat-visuals-delivery'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
 export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess
 
@@ -95,7 +97,12 @@ export type CodexStructuredSessionAdapterDeps = {
   /** Where bookkeeping a close or exit does after the child is gone reports a failure. */
   logger?: StructuredAgentSessionLogger
   /** What the session's child work did, delivered after the journal handled the frame. */
-  onChildWorkEvidence?: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
+  /** `producer`: the reporting child's own sink, which writes what the report changes. */
+  onChildWorkEvidence?: (
+    sessionId: string,
+    evidence: AgentChildWorkEvidence[],
+    producer?: StructuredAgentSessionChildWorkProducer
+  ) => void
   /** A send admitted earlier: its identity once Codex echoes it, or its rejection when the turn
    *  Codex answered it into ended without taking it. */
   onDispatchSettledLate?: (
@@ -107,9 +114,8 @@ export type CodexStructuredSessionAdapterDeps = {
         } & AgentJournalDispatchRejection)
     )
   ) => void
-  /** Codex reported its thread not running with no turn open: a send whose
-   *  dispatch was never answered is owed nothing after this. */
-  onPrimaryThreadStoppedRunning?: (input: { sessionId: string }) => void
+  /** The sends Codex holds (`CodexDispatchEchoes.heldSends`) changed with no journal row. */
+  onHeldSendsChanged?: (input: { sessionId: string }) => void
   openConnection?: typeof openCodexAppServerConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
@@ -121,6 +127,7 @@ export type CodexStructuredSessionAdapterDeps = {
 }
 
 export type CodexSession = {
+  events?: StructuredAgentSessionEventSink
   account?: AgentSessionAccountKind
   connection: CodexAppServerConnection
   ended: boolean

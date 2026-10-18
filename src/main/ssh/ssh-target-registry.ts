@@ -23,8 +23,24 @@ import type {
  * rather than freeze one.
  */
 
+/** orcad has no SSH stack yet still advertises ssh.target-management.v1 (D3), so clients show this. */
+export const SSH_TARGET_MANAGEMENT_UNSERVED_MESSAGE =
+  "This Orca server runs without the desktop app, so it can't manage SSH hosts yet."
+
+export class SshTargetManagementUnservedError extends Error {
+  constructor() {
+    super(SSH_TARGET_MANAGEMENT_UNSERVED_MESSAGE)
+    this.name = 'SshTargetManagementUnservedError'
+  }
+}
+
 let sshStore: SshConnectionStore | null = null
-let registeredConnectSshTarget: ((targetId: string) => Promise<SshConnectionState>) | null = null
+type ConnectSshTarget = (
+  targetId: string,
+  options?: { automatic?: boolean }
+) => Promise<SshConnectionState>
+
+let registeredConnectSshTarget: ConnectSshTarget | null = null
 let registeredGetSshState: ((targetId: string) => SshConnectionState | undefined) | null = null
 
 export function setSshTargetRegistryStore(store: SshConnectionStore | null): void {
@@ -36,20 +52,24 @@ export function getSshTargetRegistryStore(): SshConnectionStore | null {
 }
 
 export function setSshTargetRegistryHandlers(handlers: {
-  connect: ((targetId: string) => Promise<SshConnectionState>) | null
+  connect: ConnectSshTarget | null
   getState: ((targetId: string) => SshConnectionState | undefined) | null
 }): void {
   registeredConnectSshTarget = handlers.connect
   registeredGetSshState = handlers.getState
 }
 
-export async function connectRegisteredSshTarget(targetId: string): Promise<SshConnectionState> {
+/** `automatic`: no user asked for this connect, so a cancelled sign-in stays cancelled. */
+export async function connectRegisteredSshTarget(
+  targetId: string,
+  options?: { automatic?: boolean }
+): Promise<SshConnectionState> {
   if (!registeredConnectSshTarget) {
     // Why this still throws: a headless host that never registered handlers must fail
     // loudly rather than report a target as unreachable, which would read as `exited`.
-    throw new Error('ssh_handlers_not_registered')
+    throw new SshTargetManagementUnservedError()
   }
-  return registeredConnectSshTarget(targetId)
+  return registeredConnectSshTarget(targetId, options)
 }
 
 export function getRegisteredSshState(targetId: string): SshConnectionState | undefined {
@@ -81,7 +101,7 @@ export function setSshTargetMutations(mutations: SshTargetMutations | null): voi
 
 export function getRegisteredSshTargetMutations(): SshTargetMutations {
   if (!registeredSshTargetMutations) {
-    throw new Error('ssh_handlers_not_registered')
+    throw new SshTargetManagementUnservedError()
   }
   return registeredSshTargetMutations
 }
