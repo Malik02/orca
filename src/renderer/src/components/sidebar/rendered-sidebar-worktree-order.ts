@@ -78,7 +78,7 @@ export function computeRenderedSidebarRows(
     groupBy: state.groupBy,
     worktrees: [...visibleWorktrees],
     repoMap,
-    prGroupOf: createSidebarPRGroupReader(repoMap, prCache, state.settings),
+    prGroupOf: createSidebarPRGroupReader(repoMap, prCache),
     repoOrder: getLogicalRepoOrderRankById(state.repos.map((repo) => repo.id)),
     workspaceStatuses: state.workspaceStatuses,
     projectOrderBy: state.projectOrderBy,

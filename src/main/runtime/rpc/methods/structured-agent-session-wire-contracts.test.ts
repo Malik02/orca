@@ -28,6 +28,16 @@ import {
   STRUCTURED_CLIENT,
   STRUCTURED_MOBILE_CLIENT
 } from './structured-agent-session-rpc.test-fixture'
+import {
+  createQueuedMessageTestRig,
+  eventually
+} from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+import {
+  HOST_TEST_SESSION as HOST_SESSION,
+  hostTestMessage,
+  hostTestOperationId
+} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { holdDelivery } from '../../../native-chat/agent-session-wire/structured-agent-session-delivery-hold.test-fixture'
 
 beforeEach(installStructuredHostStub)
 afterEach(clearStructuredHostStub)
@@ -424,6 +434,59 @@ describe('agentSession.send reply timing', () => {
       })
     }
     expect(hostCalls.waitForSendSettlement).not.toHaveBeenCalled()
+  })
+
+  it('keeps an old phone image send immediate and never recovers its interrupted send as a hidden card', async () => {
+    const rig = await createQueuedMessageTestRig()
+    hostCalls.send.mockImplementation(rig.host.send.bind(rig.host))
+    const imageSend = () => {
+      const body = hostTestMessage('from an old phone')
+      body.blocks.push({ type: 'image-ref', path: '/tmp/shot.png' })
+      const fields = { body, delivery: 'queue-if-active' as const }
+      const id = hostTestOperationId()
+      return { id, request: { envelope: rig.envelope(fields, 'agentSession.send', id), ...fields } }
+    }
+    let release = () => {}
+    try {
+      const working = await rig.workingSend()
+      const image = imageSend()
+      expect(
+        await call('agentSession.send', image.request, STRUCTURED_MOBILE_CLIENT)
+      ).toMatchObject({
+        ok: true,
+        result: { value: { submission: { clientMessageId: image.id } } }
+      })
+      expect(await rig.drafts()).toEqual([])
+      await rig.settleAccepted(working, 'working')
+      await eventually(async () => {
+        expect((await rig.submission(image.id))?.handedOverAt).toBeDefined()
+        expect(
+          rig.dispatch.mock.calls.find(([input]) => input.clientMessageId === image.id)?.[0].body
+        ).toEqual(image.request.body)
+      })
+      await rig.settleAccepted(image.id, 'image')
+
+      const hold = holdDelivery()
+      release = hold.release
+      const interrupted = imageSend()
+      expect(
+        await call('agentSession.send', interrupted.request, STRUCTURED_MOBILE_CLIENT)
+      ).toMatchObject({ ok: true, result: { value: { submission: expect.anything() } } })
+      await hold.held
+      const closed = rig.host.close(HOST_SESSION, 'user-close')
+      release()
+      await closed
+      rig.crashRestartHostProcess()
+      expect(await rig.drafts()).toEqual([])
+      expect(await rig.submission(interrupted.id)).toMatchObject({
+        source: { kind: 'user' },
+        dispatchState: 'rejected'
+      })
+      expect(await rig.submission(interrupted.id)).not.toHaveProperty('keptAsQueuedMessageId')
+    } finally {
+      release()
+      await rig.dispose()
+    }
   })
 })
 

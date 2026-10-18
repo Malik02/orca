@@ -57,10 +57,14 @@ function assertNativeConversationContent(snapshot: AgentJournalSnapshot): void {
 }
 
 /** A slow preparation must not launch from a chat that left this workspace. */
-export function isStructuredChatCliForkSourceCurrent(sessionId: string, workspaceId: string): boolean {
+export function isStructuredChatCliForkSourceCurrent(
+  sessionId: string,
+  workspaceId: string
+): boolean {
   const record = getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)
   return Boolean(
-    record && record.location.workspaceId === workspaceId &&
+    record &&
+    record.location.workspaceId === workspaceId &&
     record.location.executionHostId === LOCAL_EXECUTION_HOST_ID &&
     record.location.wslDistro === null
   )

@@ -74,9 +74,6 @@ vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionShee
 vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
-vi.mock('./MobileAgentWorkingIndicator', () => ({
-  MobileAgentWorkingIndicator: 'WorkingIndicator'
-}))
 
 const STOP_ROW = `stopped-before-start:orca:${NEVER_OPENED}`
 
@@ -98,7 +95,8 @@ const HOST_SUPPORT = {
   quietRepeatedStop: true,
   sendOptions: false,
   conversationStop: false,
-  permissionModes: false
+  permissionModes: false,
+  phoneAttachments: false
 }
 
 type Phone = {

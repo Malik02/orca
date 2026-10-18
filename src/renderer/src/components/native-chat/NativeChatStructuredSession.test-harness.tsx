@@ -129,6 +129,7 @@ export function createStructuredSessionMocks() {
       }
       isWorking?: boolean
       isStopping?: boolean
+      unavailableHint?: string
       afterStop?: 'queue' | 'send'
       steerQueued?: () => boolean
       onStop?: () => void
@@ -248,6 +249,8 @@ export function createStructuredSessionMocks() {
               steer: mocks.queuedSteer,
               remove: mocks.queuedRemove,
               edit: mocks.queuedEdit,
+              pending: () => null,
+              queuePending: null,
               steerNewest: mocks.queuedSteerNewest
             },
             threadGoal: mocks.threadGoal,

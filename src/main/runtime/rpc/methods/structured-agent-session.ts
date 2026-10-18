@@ -14,6 +14,10 @@ import {
   projectBackgroundTaskHistory
 } from './structured-agent-session-background-task-capability'
 import {
+  projectQueuedImageCardPublication,
+  projectQueuedImageCardHistory
+} from './structured-agent-session-queued-image-capability'
+import {
   projectTurnItemEvent,
   projectTurnItemHistory
 } from './structured-agent-session-turn-item-capability'
@@ -167,7 +171,10 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     handler: async (params, ctx) => {
       const host = await requireInstalledHost(ctx, params.sessionId)
       return projectTurnItemHistory(
-        projectBackgroundTaskHistory(await host.history(params), ctx),
+        projectQueuedImageCardHistory(
+          projectBackgroundTaskHistory(await host.history(params), ctx),
+          ctx
+        ),
         ctx,
         host.sessionAgent(params.sessionId)
       )
@@ -192,6 +199,8 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
         readsCurrentRequests: clientReadsCurrentRequests(ctx),
         id: subscriptionId,
         sessionId: params.sessionId,
+        projectQueuePublication: (publication) =>
+          projectQueuedImageCardPublication(publication, ctx),
         emit: (event) =>
           emit(
             projectTurnItemEvent(

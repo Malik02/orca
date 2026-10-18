@@ -58,6 +58,7 @@ export type SortableTabProps = {
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onCloseToLeft: (tabId: string) => void
+  onCloseSplitPane?: () => void
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
@@ -92,6 +93,7 @@ export default function SortableTab({
   onCloseOthers,
   onCloseToRight,
   onCloseToLeft,
+  onCloseSplitPane,
   onSetCustomTitle,
   onSetTabColor,
   onTogglePin,
@@ -417,6 +419,7 @@ export default function SortableTab({
         onCloseOthers={onCloseOthers}
         onCloseToRight={onCloseToRight}
         onCloseToLeft={onCloseToLeft}
+        onCloseSplitPane={onCloseSplitPane}
         onRenameOpen={handleRenameOpen}
         onSetTabColor={onSetTabColor}
         onTogglePin={onTogglePin}

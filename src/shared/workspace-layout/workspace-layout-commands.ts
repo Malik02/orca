@@ -21,6 +21,7 @@ import {
   splitGroup
 } from './workspace-layout-group-commands'
 import { renameEditorFiles } from './workspace-layout-editor-rekey'
+import { openSimulatorTab } from './workspace-layout-simulator-tab'
 import { updateLegacyPersistence } from './workspace-layout-legacy-persistence'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import {
@@ -47,7 +48,8 @@ const CREATES_WORKSPACE = new Set<LayoutCommand['type']>([
   'createTerminalTab',
   'openEditorTab',
   'openBrowserTab',
-  'openAgentSessionTab'
+  'openAgentSessionTab',
+  'openSimulatorTab'
 ])
 
 export function applyLayoutCommand(
@@ -64,6 +66,9 @@ function applyCommand(
   command: LayoutCommand,
   context: LayoutContext
 ): Applied {
+  if (command.type === 'setDefaultTabsApplied') {
+    return setDefaultTabsApplied(model, command.workspace)
+  }
   if (!model.workspaces[command.workspace] && !CREATES_WORKSPACE.has(command.type)) {
     // Closing what is already gone is not an error (#10747).
     if (command.type === 'closeTabs') {
@@ -106,6 +111,8 @@ function applyCommand(
       return setChatPane(model, command)
     case 'openEditorTab':
       return openInNewGroup(model, command, (next) => openEditorTab(next, command, context))
+    case 'openSimulatorTab':
+      return openInNewGroup(model, command, (next) => openSimulatorTab(next, command, context))
     case 'promotePreviewTab':
       return promotePreviewTab(model, command)
     case 'moveTabToWorkspace':
@@ -123,7 +130,7 @@ function applyCommand(
     case 'setBrowserTabProfile':
       return setBrowserTabProfile(model, command)
     case 'openAgentSessionTab':
-      return openAgentSessionTab(model, command, context)
+      return openInNewGroup(model, command, (next) => openAgentSessionTab(next, command, context))
     case 'startPane':
       return startPane(model, command, context)
     case 'restartPane':
@@ -133,4 +140,16 @@ function applyCommand(
     case 'wake':
       return wake(model, command)
   }
+}
+
+// A record, not a layout: a workspace with no tabs yet (zero templates) is marked, not created.
+function setDefaultTabsApplied(model: WorkspaceLayoutModel, workspace: string): Applied {
+  const marks = model.records.defaultTabsAppliedByWorkspace
+  if (marks?.[workspace]) {
+    return applied(model)
+  }
+  return applied({
+    ...model,
+    records: { ...model.records, defaultTabsAppliedByWorkspace: { ...marks, [workspace]: true } }
+  })
 }

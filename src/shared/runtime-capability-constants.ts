@@ -166,6 +166,11 @@ export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
 // A client offers Edit only when the host advertises it; there is no copy-and-delete fallback.
 export const AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY =
   'agent-session.queued-message-edit.v1' as const
+// Why: a client advertising this shows a queued card's images and edits its text in place, keeping
+// them. Released readers show only a card's text and edit by copying it and deleting the card, which
+// would drop the images, so the host publishes no card holding an image to a reader without it.
+export const AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY =
+  'agent-session.queued-image-cards.v1' as const
 // Why: `agentSession.conversationCommand`'s params are strict, so an older host rejects
 // `delivery`. A host advertising this holds a /compact sent while the agent works as a queued
 // card instead of refusing it. Clients ask only when queued-messages.v1 is advertised too:
@@ -203,6 +208,9 @@ export const AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY =
 // (agentSessionAttachment.*); an older server has no store, so clients must refuse
 // the attach rather than hand the agent a path from this machine.
 export const AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY = 'agent-session.attachments.v1' as const
+// Why: hosts before this advertise attachments.v1 but refuse the upload methods from a phone.
+export const AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY =
+  'agent-session.attachments.phone.v1' as const
 // Why: the host now publishes rows for work that is live inside a turn, and such
 // a row carries `stoppable: false` because no targeted stop can reach it. A
 // reader that predates the field draws a per-row Stop on every row it is given,

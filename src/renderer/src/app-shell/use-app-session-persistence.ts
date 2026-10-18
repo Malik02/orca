@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { createSessionWriteSubscriber } from '../lib/session-write-subscriber'
 import { buildActiveViewUnloadPatch } from '../lib/active-view-persist'
 import {
@@ -19,6 +20,7 @@ import {
   createShutdownCheckpointGuard
 } from '../lib/shutdown-checkpoint-guard'
 import { createShutdownCheckpointPersist } from './shutdown-checkpoint-persist'
+import { createQuitSleepRecordCapture } from './quit-sleep-record-capture'
 import { shutdownBufferCaptures } from '../components/terminal-pane/shutdown-buffer-captures'
 import {
   dispatchWindowCloseRequest,
@@ -66,6 +68,9 @@ export function useAppSessionPersistence(): void {
     // two firings, PTY exit events can arrive and unmount TerminalPanes,
     // emptying shutdownBufferCaptures. The guard prevents the second call
     // from overwriting the good session data with an empty snapshot.
+    const quitSleepRecords = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? createQuitSleepRecordCapture(useAppStore)
+      : null
     const shutdownCheckpointPersist = createShutdownCheckpointPersist({
       shouldCaptureSession: () => shouldPersistWorkspaceSession(useAppStore.getState()),
       captureTerminalBuffers: () => {
@@ -81,8 +86,11 @@ export function useAppSessionPersistence(): void {
       // which is in-memory. Capture them into the persisted sleeping-session
       // map so a daemon/session death while the app is closed can still
       // cold-restore via the agent's resume command (#5232).
-      captureSleepingAgentSessions: () =>
-        useAppStore.getState().captureAllSleepingAgentSessions('quit'),
+      // Switch point: the stage writes only the capture's changes into main's records.
+      captureSleepingAgentSessions: quitSleepRecords
+        ? quitSleepRecords.capture
+        : () => useAppStore.getState().captureAllSleepingAgentSessions('quit'),
+      onSleepRecordsStaged: quitSleepRecords?.staged,
       // Why: re-read state after capture() calls populated scrollback buffers
       // into the store via Zustand setters. The shouldCaptureSession read is
       // only for the gating flags and would miss those updates.

@@ -23,6 +23,8 @@ import {
   getStructuredLaunchStateBySessionId
 } from './structured-agent-session-launch-registry'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { recordOpenedAgentSessionTabInLayoutOwner } from '@/runtime/agent-session-tab-layout-owner'
 import {
   clearWebSessionFocusIntentIfMatches,
   peekWebSessionFocusIntent,
@@ -171,6 +173,10 @@ export function openStructuredAgentSessionProvisionalTab(args: {
       (address?.worktreeId === args.worktreeId ? address.targetGroupId : args.targetGroupId),
     activate: args.activate !== false
   })
+  // Switch point: main records the chat tab the window just drew.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    recordOpenedAgentSessionTabInLayoutOwner(useAppStore.getState(), tab)
+  }
   if (args.activate !== false) {
     state.setActiveTabType('agent-session', args.worktreeId)
   }
