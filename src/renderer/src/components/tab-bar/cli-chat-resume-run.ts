@@ -9,6 +9,7 @@ import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { resolveCliChatResumeSource, type CliChatResumeSource } from './cli-chat-resume-source'
 import { reportCliChatResumeFailure } from './cli-chat-resume-feedback'
+import { adoptingAgentOnHost } from '../right-sidebar/ai-vault-session-resume-in-chat-launch'
 
 const pending = new Map<string, AbortController>()
 const listeners = new Set<() => void>()
@@ -103,10 +104,17 @@ export async function runCliChatResume(
     if (!isCurrent()) {
       return
     }
+    const agent = await waitForPromiseWithSignal(
+      adoptingAgentOnHost(source.agent, source.workspaceId),
+      controller.signal
+    )
+    if (!isCurrent()) {
+      return
+    }
     const plan = adoptAgentSessionLaunchVerdict({
       route: 'structured-native-chat',
       requestId: newAgentLaunchRequestId(),
-      agent: CLI_CONVERSATION_ADOPTING_AGENTS[source.agent],
+      agent,
       worktreeId: source.workspaceId,
       executionHostId: source.executionHostId,
       resumeFrom: {
