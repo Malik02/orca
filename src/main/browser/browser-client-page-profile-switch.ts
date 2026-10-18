@@ -13,6 +13,7 @@ import type { BrowserClientPageCommandExecutorDependencies } from './browser-cli
 import { createReservedBrowserClientPage } from './browser-client-page-creation'
 import type { BrowserClientRetainedPage } from './browser-client-page-retained-state'
 import { updateBrowserClientPageInventoryCurrentUrl } from './browser-client-page-inventory'
+import { markBrowserClientPageUnavailable } from './browser-client-page-availability'
 
 export async function switchBrowserClientPageProfile(input: {
   event: BrowserClientHostCommandEvent
@@ -108,7 +109,11 @@ export async function switchBrowserClientPageProfile(input: {
     assertBrowserClientPageCommandNotAborted(signal)
     input.assertAvailable()
     assertCurrentBrowserClientPageRenderer(staged.renderer)
-    if (input.pages.get(event.browserPageId) !== old || !old.lifecycleClaim.isCurrent()) {
+    if (
+      input.pages.get(event.browserPageId) !== old ||
+      !old.lifecycleClaim.isCurrent() ||
+      !staged.lifecycleClaim.isCurrent()
+    ) {
       throw new BrowserClientPageCommandError('browser_client_page_generation_stale')
     }
     input.commit(staged)
@@ -128,7 +133,12 @@ export async function switchBrowserClientPageProfile(input: {
     } finally {
       switches.stagedPages.delete(event.browserPageId)
       old.reconciling = false
-      if (bindingAttempted && old.lifecycleClaim.isCurrent()) {
+      if (!old.lifecycleClaim.isCurrent()) {
+        // Its loss was reported once while reconciling suppressed it, so report it now.
+        markBrowserClientPageUnavailable(input.pages, old.registration, (id, generation) =>
+          dependencies.onPageUnavailable?.(id, generation)
+        )
+      } else if (bindingAttempted) {
         dependencies.guestBinding.bind({
           registration: old.registration,
           browserProfileId: old.inventory.browserProfileId

@@ -1,6 +1,10 @@
 import { BrowserRoutePageAvailability } from './browser-route-page-availability'
 import { describe, expect, it, vi } from 'vitest'
-import { createCommand, createHarness } from './browser-client-page-command-executor-test-harness'
+import {
+  createCommand,
+  createHarness,
+  createLifecycleClaim
+} from './browser-client-page-command-executor-test-harness'
 import type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
 
 const switchCommand = (): BrowserClientHostCommandEvent =>
@@ -17,8 +21,16 @@ const switchCommand = (): BrowserClientHostCommandEvent =>
     }
   })
 
-async function fixture(availability?: BrowserRoutePageAvailability) {
+async function fixture(
+  availability?: BrowserRoutePageAvailability,
+  oldGuestIsCurrent?: () => boolean
+) {
   const harness = createHarness()
+  if (oldGuestIsCurrent) {
+    harness.dependencies.routeWebContents.claimGuestLifecycle.mockImplementationOnce(
+      (registration) => createLifecycleClaim(registration, Promise.resolve(), oldGuestIsCurrent)
+    )
+  }
   if (availability) {
     Object.assign(harness.dependencies.routeWebContents, {
       watchPageAvailability: availability.watch
@@ -227,6 +239,47 @@ describe('staged client page profile switching', () => {
     })
     expect(h.executor.hasPage('page-a', 7)).toBe(true)
     await expect(h.executor.close()).rejects.toThrow('Browser client page executor cleanup failed')
+  })
+
+  it('does not commit a replacement guest that died before the switch finished', async () => {
+    const h = await fixture()
+    let replacementAlive = true
+    h.dependencies.routeWebContents.claimGuestLifecycle.mockImplementationOnce((registration) =>
+      createLifecycleClaim(registration, Promise.resolve(), () => replacementAlive)
+    )
+    h.bindReplacement.mockImplementation(() => {
+      replacementAlive = false
+    })
+    expect(await h.executor.handle(switchCommand(), new AbortController().signal)).toMatchObject({
+      status: 'failed',
+      errorCode: 'browser_client_page_generation_stale'
+    })
+    expect(h.executor.hasPage('page-a', 7)).toBe(true)
+    expect(h.dependencies.routeWebContents.beginGuestRetirement).toHaveBeenCalledTimes(1)
+    expect(h.dependencies.routeWebContents.beginGuestRetirement).toHaveBeenCalledWith(
+      expect.objectContaining({ registration: expect.objectContaining({ webContentsId: 42 }) })
+    )
+  })
+
+  it('reports an old guest lost during a failed switch so recovery can run', async () => {
+    let oldAlive = true
+    const availability = new BrowserRoutePageAvailability()
+    const h = await fixture(availability, () => oldAlive)
+    const onPageUnavailable = vi.fn()
+    Object.assign(h.dependencies, { onPageUnavailable })
+    h.dependencies.routeSessions.preparePage.mockImplementationOnce(async () => {
+      oldAlive = false
+      availability.report(h.dependencies.routeWebContents.claimGuestLifecycle.mock.calls[0]![0])
+      throw new Error('target profile rejected')
+    })
+    expect(await h.executor.handle(switchCommand(), new AbortController().signal)).toMatchObject({
+      status: 'failed'
+    })
+    expect(onPageUnavailable).toHaveBeenCalledWith('page-a', 7)
+    expect(h.executor.snapshotPageInventory()).toMatchObject([
+      { pageHostGeneration: 7, state: 'outcomeUnknown' }
+    ])
+    expect(h.dependencies.guestBinding.bind).toHaveBeenCalledTimes(1)
   })
 
   it('rejects stale generations without preparing or binding anything', async () => {
