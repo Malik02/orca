@@ -115,7 +115,7 @@ describe('WorktreeCard pinned repo icon', () => {
   })
 
   it(
-    'shows the configured repo icon for pinned cards even when the repo badge is hidden',
+    'shows the repo icon and project name for pinned cards even when the repo badge is hidden',
     async () => {
       const { default: WorktreeCard } = await import('./WorktreeCard')
 
@@ -132,6 +132,7 @@ describe('WorktreeCard pinned repo icon', () => {
 
       expect(markup).toContain('🦊')
       expect(markup).toContain('Project orca')
+      expect(markup).toContain('>orca</span>')
     },
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
   )

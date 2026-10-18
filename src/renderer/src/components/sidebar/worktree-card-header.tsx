@@ -15,44 +15,32 @@ import { WorktreeCardSshHostControl } from './WorktreeCardSshHostControl'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
-// Why: pinned repo icon and compact inline badge share this chip shell so both repo cues read as the same affordance.
+// Why: pinned and compact inline project cues share this chip so both read as the same affordance.
 function RepoIdentityChip({
   repo,
-  showName = false,
   children
 }: {
   repo: Repo
-  showName?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className={cn(
-            'inline-flex shrink-0 items-center justify-center rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55',
-            showName ? 'h-4 max-w-24 gap-0.5 px-0.5' : 'size-4'
-          )}
+          className="inline-flex h-4 max-w-24 shrink-0 items-center justify-center gap-0.5 rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55 px-0.5"
           aria-label={translate(
             'auto.components.sidebar.WorktreeCard.35ccfe2475',
             'Project {{value0}}',
             { value0: repo.displayName }
           )}
         >
-          <span
-            className={cn(
-              'inline-flex shrink-0 items-center justify-center',
-              showName ? 'size-3' : 'size-full'
-            )}
-          >
+          <span className="inline-flex size-3 shrink-0 items-center justify-center">
             {children}
           </span>
-          {/* Why: this chip is the only project cue on compact and new cards. */}
-          {showName ? (
-            <span className="min-w-0 truncate text-3xs font-semibold leading-none text-foreground">
-              {repo.displayName}
-            </span>
-          ) : null}
+          {/* Why: the default folder icon is the same for every project, so the name tells them apart. */}
+          <span className="min-w-0 truncate text-3xs leading-none text-muted-foreground lowercase">
+            {repo.displayName}
+          </span>
         </span>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>
@@ -174,7 +162,7 @@ export function WorktreeCardHeader({
         )}
 
         {showInlineRepoBadge && (
-          <RepoIdentityChip repo={repo!} showName>
+          <RepoIdentityChip repo={repo!}>
             <RepoIconGlyph
               repoIcon={repo!.repoIcon}
               color={resolveRepoHeaderColor(repo!.badgeColor)}
