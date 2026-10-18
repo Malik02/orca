@@ -65,7 +65,7 @@ describe('skills CLI runtime closure', () => {
 
       expect(
         collectRuntimeClosure(root)
-          .map((file) => relative(realpathSync(root), file))
+          .map((file) => relative(realpathSync(root), file).split('\\').join('/'))
           .sort()
       ).toEqual(['cli/handlers/skills.js', 'cli/index.js', 'shared/first.js', 'shared/second.js'])
     } finally {
