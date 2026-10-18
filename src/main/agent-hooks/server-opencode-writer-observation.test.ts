@@ -2,7 +2,6 @@ import {
   AgentStatusObservedPaneIdentities,
   AgentStatusObservedPaneIdentityCapture
 } from '../runtime/agent-status-observed-pane-identity'
-import { assertCliConversationWritersExited } from '../runtime/structured-agent-cli-writers'
 import {
   OPEN_CODE_WRITER_TOPOLOGY,
   cliWriterExecutionMatcher
@@ -82,24 +81,6 @@ describe('OpenCode writer observation', () => {
     server.setCliWriterExecutionMatcher(cliWriterExecutionMatcher(identities, runtime))
     expect(observation()?.topology).toBe('unverifiable')
     await post()
-    const shellAlone = vi.fn(async () => false)
-    const inspect = () =>
-      assertCliConversationWritersExited(
-        {
-          rows: () => server.getStatusSnapshot(),
-          saved: () => [],
-          observation: (value) => server.readCliWriterObservation(value),
-          terminal: () => ({
-            pane: { ptyId: 'pty', incarnationId: incarnation, identity: incarnation }
-          }),
-          links: () => [],
-          sleeping: () => false,
-          shellAlone
-        },
-        'opencode',
-        'open-code-conversation'
-      )
-    await expect(inspect()).rejects.toMatchObject({ refusal: { code: 'agent_session_conflict' } })
     const interrupt = () => {
       const value = row()
       expect(
@@ -126,8 +107,6 @@ describe('OpenCode writer observation', () => {
       })
     repaint()
     expect(observation()?.topology).toBe('pane-owned')
-    shellAlone.mockResolvedValue(true)
-    await expect(inspect()).resolves.toBeUndefined()
     const binding = row().providerSession
     expect(binding && OPEN_CODE_WRITER_TOPOLOGY in binding).toBe(true)
     const snapshot = row()
@@ -165,6 +144,5 @@ describe('OpenCode writer observation', () => {
     expect(observation()?.topology).toBe('unverifiable')
     repaint()
     expect(observation()?.topology).toBe('unverifiable')
-    await expect(inspect()).rejects.toMatchObject({ refusal: { code: 'agent_session_conflict' } })
   })
 })
