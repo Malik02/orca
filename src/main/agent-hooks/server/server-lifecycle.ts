@@ -291,6 +291,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.retiredPaneFencesByKey.clear()
     this.connectionTimestampWatermarkById.clear()
     this.evidenceObservedAtByPaneKey.clear()
+    this.programStatusFacets.clear()
     this.activeHookTurnCompletedAtByPaneKey.clear()
     this.legacyPaneKeyAliases.clear()
     this.paneKeyAliasPersistenceListener = null

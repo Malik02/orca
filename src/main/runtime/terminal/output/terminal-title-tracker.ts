@@ -4,7 +4,7 @@ import { getDecorativeTitleGateKey } from '../../../../shared/agent-decorative-t
 import { shouldEmitTitleFactForFrame } from '../../decorative-title-fact-emission'
 import type { RuntimePtyTitleTrackerEntry } from '../../runtime-terminal-state-records'
 import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
-import { detectAgentStatusFromTitle } from '../../../../shared/agent-detection'
+import type { AgentStatus } from '../../../../shared/agent-detection'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 
 export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntimeWithEmitDaemonPtyTransientFact {
@@ -19,6 +19,8 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
     meta?: TerminalTitleFactMeta
   ): boolean
   protected abstract confirmPtyAgentExit(ptyId: string, recoverCompletedHook?: boolean): void
+  protected abstract classifyPtyTitleStatus(ptyId: string, rawTitle: string): AgentStatus | null
+  protected abstract applyPtyProgramActivity(ptyId: string, activity: AgentStatus | null): void
   protected abstract createTerminalSideEffectCommandCodeDetector(
     ptyId: string
   ): NonNullable<RuntimePtyTitleTrackerEntry['commandCodeDetector']>
@@ -114,7 +116,9 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
           const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
           const tracksReplicatedStatus =
             live?.applyingChunk === true && this.mobileSessionTabListeners.size > 0
-          const titleStatus = tracksReplicatedStatus ? detectAgentStatusFromTitle(rawTitle) : null
+          const titleStatus = tracksReplicatedStatus
+            ? this.classifyPtyTitleStatus(ptyId, rawTitle)
+            : null
           if (
             tracksReplicatedStatus &&
             decorativeOnly &&
@@ -154,11 +158,15 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
           this.recordTerminalSideEffectFact(ptyId, {
             kind: 'agent-idle',
             title,
+            ...(meta?.status ? { status: meta.status } : {}),
             ...(meta?.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
           })
         },
         onAgentExited: () => {
           this.confirmPtyAgentExit(ptyId)
+        },
+        onProgramActivity: (activity) => {
+          this.applyPtyProgramActivity(ptyId, activity)
         },
         onCommandStarted: () => {
           this.openCodeRunLifetime.onCommandStarted(ptyId)
@@ -200,7 +208,8 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
       // saw one) mirrors the renderer detector's startupCommand fast-arm.
       commandCodeDetector: this.terminalSideEffectConsumerAvailable
         ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
+        : null,
+      programActivity: null
     }
     this.ptyTitleTrackersByPtyId.set(ptyId, entry)
     return entry

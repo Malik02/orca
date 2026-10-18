@@ -83,6 +83,10 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     }
     const processDeathCertified =
       exitCode >= 0 || options.hostExitConfirmed === true || options.providerExitObserved === true
+    if (processDeathCertified) {
+      // An unverifiable exit keeps the facet tracked until a certified exit or prune.
+      this.clearLiveProgramStatusFacet(ptyId)
+    }
     if (processDeathCertified && exitPaneKeys.size > 0) {
       this.reconcileAgentStatusForEndedProcessFn?.(exitPaneKeys)
     }

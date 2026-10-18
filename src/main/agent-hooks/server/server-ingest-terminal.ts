@@ -11,6 +11,8 @@ import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
+import { programStatusYieldsToHookRow } from './program-status/hook-precedence'
+import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 
 export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
   /**
@@ -61,6 +63,20 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     this.applyNormalizedStatus(identity, undefined, 'launch')
   }
 
+  /** The pane's OSC 7501 facet changed. Applies whoever owns the row's state; see ProgramStatusFacetStore. */
+  ingestProgramStatusFacet(event: { paneKey: string; facet: ProgramStatusFacet | null }): void {
+    const paneKey = this.resolvePaneKeyAlias(event.paneKey.trim())
+    if (
+      paneKey.length > MAX_PANE_KEY_LEN ||
+      (!parsePaneKey(paneKey) && !parseLegacyNumericPaneKey(paneKey))
+    ) {
+      return
+    }
+    if (this.programStatusFacets.set(paneKey, event.facet)) {
+      this.republishProgramStatusFacet(paneKey)
+    }
+  }
+
   ingestTerminalStatus(event: {
     ptyId?: string
     paneKey: string
@@ -73,6 +89,8 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     origin?: 'process'
     /** Drop this write when a hook has reported the pane since then (the hook owns that command). */
     yieldsToHookSince?: number
+    /** Projected from OSC 7501: yields to the pane's hook row (programStatusYieldsToHookRow). */
+    fromProgramStatus?: true
   }): void {
     const physicalPaneKey = event.paneKey.trim()
     let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
@@ -160,9 +178,15 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.yieldsToHookSince !== undefined &&
       previous?.observation?.origin === 'hook' &&
       previous.receivedAt >= event.yieldsToHookSince
+    const hookOwnsAgent =
+      event.fromProgramStatus === true &&
+      programStatusYieldsToHookRow(previous, event.payload, Date.now())
     if (
       hookOwnsCommand ||
-      (previous?.payload.agentType === 'claude' &&
+      hookOwnsAgent ||
+      // OSC 7501 settles child-held rows through its own hook precedence above.
+      (event.fromProgramStatus !== true &&
+        previous?.payload.agentType === 'claude' &&
         event.payload.agentType === 'claude' &&
         isAgentStatusHeldOpenByChildWork(previous.payload) &&
         previous.payload.subagents?.some((subagent) => subagent.state === 'working') === true)

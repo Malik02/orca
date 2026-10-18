@@ -6,6 +6,7 @@
 
 import {
   type AgentStatus,
+  type AgentIdleStatus,
   clearWorkingIndicators,
   createAgentStatusTracker,
   detectAgentStatusFromTitle,
@@ -33,6 +34,9 @@ export type TerminalTitleFactMeta = {
   staleWorkingTitleClear?: boolean
 }
 
+/** An idle edge's provenance plus the status the tracker classified, so readers need not re-read the title. */
+export type AgentIdleEdgeMeta = TerminalTitleFactMeta & { status?: AgentIdleStatus }
+
 type TerminalTitleTrackerChunkOptions = {
   titleScanData?: string
   mode2031PendingSubscribe?: boolean
@@ -41,9 +45,11 @@ type TerminalTitleTrackerChunkOptions = {
 export type TerminalTitleTrackerCallbacks = {
   /** Fired once per observed OSC title, in byte order — including the synthesized cleared title when the stale-working timer fires. */
   onTitle?: (normalizedTitle: string, rawTitle: string, meta?: TerminalTitleFactMeta) => void
-  onAgentBecameIdle?: (title: string, meta?: TerminalTitleFactMeta) => void
+  onAgentBecameIdle?: (title: string, meta?: AgentIdleEdgeMeta) => void
   onAgentBecameWorking?: () => void
   onAgentExited?: () => void
+  /** Fired per change in the program's OSC 7501 activity (see applyProgramActivity). */
+  onProgramActivity?: (activity: AgentStatus | null) => void
   /** Fired once per chunk containing a real BEL (OSC-aware, cross-chunk escape state), after the chunk's titles (renderer drain order). */
   onBell?: () => void
   /**
@@ -82,6 +88,9 @@ export type TerminalTitleTracker = {
    * No-ops once any title has been observed or seeded (live state wins); fires no callbacks.
    */
   seedInitialTitle: (rawTitle: string) => void
+  /** The program's OSC 7501 activity changed (`null`: it stopped reporting). While set it outranks
+   *  title glyphs; apply a chunk's changes before its titles, which then no longer move status. */
+  applyProgramActivity: (activity: AgentStatus | null) => void
   /** Restore the status consumed by the latest exit candidate when process evidence disproves it. */
   restoreLastAgentExit: (confirmedStatus?: AgentStatus) => AgentStatus | null
   /** Last title surfaced through onTitle, after normalization. */
@@ -107,6 +116,7 @@ export function createTerminalTitleTracker(
     onAgentBecameIdle,
     onAgentBecameWorking,
     onAgentExited,
+    onProgramActivity,
     onBell,
     onCommandFinished,
     onCommandStarted,
@@ -140,11 +150,11 @@ export function createTerminalTitleTracker(
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
-          (title) => {
-            onAgentBecameIdle?.(
-              title,
-              applyingStaleWorkingTitleClear ? { staleWorkingTitleClear: true } : undefined
-            )
+          (title, status) => {
+            onAgentBecameIdle?.(title, {
+              status,
+              ...(applyingStaleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
+            })
           },
           onAgentBecameWorking,
           onAgentExited,
@@ -274,6 +284,10 @@ export function createTerminalTitleTracker(
       if (!isCursorNativeAgentTitle(rawTitle)) {
         agentTracker?.seedTitle(rawTitle)
       }
+    },
+    applyProgramActivity(activity: AgentStatus | null): void {
+      agentTracker?.handleProgramActivity(activity)
+      onProgramActivity?.(activity)
     },
     restoreLastAgentExit(confirmedStatus?: AgentStatus): AgentStatus | null {
       return agentTracker?.restoreLastExit(confirmedStatus) ?? null

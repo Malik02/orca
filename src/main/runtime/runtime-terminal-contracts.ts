@@ -1,3 +1,4 @@
+import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch-tab-publication'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
@@ -176,11 +177,20 @@ export type RuntimeTerminalAgentStatusEvent = {
   /** Set by the process-lifetime producer; see AgentHookServer.ingestTerminalStatus. */
   origin?: 'process'
   yieldsToHookSince?: number
+  /** Projected from OSC 7501; the store applies it only where hooks do not speak for the pane. */
+  fromProgramStatus?: true
+}
+
+/** A pane's OSC 7501 facet changed. `facet: null` means the program's root record is gone. */
+export type RuntimeTerminalProgramStatusFacetEvent = {
+  ptyId: string
+  paneKey: string
+  facet: ProgramStatusFacet | null
 }
 
 export type HookLiveAgentRow = Pick<
   RuntimeAgentRowSnapshot,
-  'payload' | 'updatedAt' | 'evidenceObservedAt' | 'stateStartedAt' | 'worktreeId'
+  'payload' | 'updatedAt' | 'evidenceObservedAt' | 'stateStartedAt' | 'worktreeId' | 'programStatus'
 >
 
 export type TerminalHandleRecord = {

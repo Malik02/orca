@@ -7,6 +7,7 @@ import {
   type TerminalOscColorQuerySlot
 } from '../../../../shared/terminal-osc-color-reply'
 import { guardParserHandler } from './terminal-parser-handler-guard'
+import { installProgramStatusQueryResponder } from '../../../../shared/program-status/query-responder'
 
 export const DEFAULT_DA1_RESPONSE = '\x1b[?1;2c'
 export const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
@@ -188,7 +189,12 @@ export function installTerminalCapabilityReplyHandlers(
         }
         return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
       })
-    )
+    ),
+    installProgramStatusQueryResponder({
+      parser: deps.parser,
+      emitReply: deps.sendInput,
+      shouldReply: () => !deps.isReplaying()
+    })
   ]
 
   return {

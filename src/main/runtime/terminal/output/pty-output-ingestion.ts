@@ -297,9 +297,17 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
           ptyRecord.lastExplicitAgentStatus = {
             state: latestAgentStatus.state,
             updatedAt: Date.now(),
-            sessionBoundary: latestAgentStatus.sessionBoundary
+            sessionBoundary: latestAgentStatus.sessionBoundary,
+            ...(latestAgentStatus.state === 'done' &&
+            agentStatusChunk.programStatusPayloads?.has(latestAgentStatus)
+              ? { programAtRest: true }
+              : {})
           }
         }
+      }
+      // Why before the titles: once the program reports its activity, titles no longer move status.
+      for (const activity of agentStatusChunk.programActivity ?? []) {
+        titleTrackerEntry.tracker.applyProgramActivity(activity)
       }
       titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
         titleScanData: titleInput

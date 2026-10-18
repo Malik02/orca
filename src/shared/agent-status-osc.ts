@@ -1,6 +1,8 @@
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 import { parseAgentStatusPayload } from './agent-status-types'
 import { ownRetainedString } from './own-retained-string'
+import type { ProgramStatusFacet } from './program-status/facet'
+import type { AgentStatus } from './agent-title-core'
 
 const OSC_AGENT_STATUS_PREFIX = '\x1b]9999;'
 
@@ -24,6 +26,13 @@ export type ProcessedAgentStatusChunk = {
   cleanData: string
   payloads: ParsedAgentStatusPayload[]
   lastPayloadCleanOffset: number | null
+  /** The subset of `payloads` projected from OSC 7501 records; these yield to the pane's hook row. */
+  programStatusPayloads?: ReadonlySet<ParsedAgentStatusPayload>
+  /** The chunk's net OSC 7501 facet change: new facet, `null` when cleared, absent when unchanged. */
+  programStatusFacet?: ProgramStatusFacet | null
+  /** Each change in the program's OSC 7501 activity, in byte order; `null` once it stops reporting.
+   *  Title trackers classify by it ahead of title glyphs. */
+  programActivity?: readonly (AgentStatus | null)[]
 }
 
 function findAgentStatusTerminator(

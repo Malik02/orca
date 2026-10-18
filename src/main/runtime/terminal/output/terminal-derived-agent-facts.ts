@@ -11,6 +11,7 @@ import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-pat
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from '../../runtime-worktree-status-projection'
 import type { RuntimeTerminalAgentStatusEvent } from '../../runtime-terminal-contracts'
+import { programStatusStateOutlivesProgram } from '../../../../shared/program-status/protocol'
 
 type TerminalAgentStatusTarget = Pick<
   RuntimeTerminalAgentStatusEvent,
@@ -97,10 +98,33 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
     chunk: Pick<ProcessedAgentStatusChunk, 'payloads'> & Partial<ProcessedAgentStatusChunk>,
     provenance?: { origin: 'process'; yieldsToHookSince: number }
   ): void {
-    if (chunk.payloads.length === 0) {
+    const facet = chunk.programStatusFacet
+    if (chunk.payloads.length === 0 && facet === undefined) {
       return
     }
+    if (facet !== undefined) {
+      if (facet && !programStatusStateOutlivesProgram(facet.state)) {
+        this.liveProgramStatusFacetPtyIds.add(ptyId)
+      } else {
+        this.liveProgramStatusFacetPtyIds.delete(ptyId)
+      }
+    }
     const targets = this.resolveTerminalAgentStatusTargets(ptyId)
+    // Why before the payloads: each row this chunk publishes must already carry the program's
+    // latest report, or a reader acting between the two (the 133;D drop) sees a stale facet.
+    if (facet !== undefined && this.onTerminalProgramStatusFacet) {
+      for (const target of targets) {
+        try {
+          this.onTerminalProgramStatusFacet({ ptyId, paneKey: target.paneKey, facet })
+        } catch (err) {
+          console.error('[runtime] terminal program status listener threw', {
+            ptyId,
+            paneKey: target.paneKey,
+            err
+          })
+        }
+      }
+    }
     for (const payload of chunk.payloads) {
       // Why not gated on a listener: the prompt lifecycle is main's own state, read by
       // terminal waits that run with no status consumer attached.
@@ -117,7 +141,8 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
             ptyId,
             ...target,
             payload,
-            ...provenance
+            ...provenance,
+            ...(chunk.programStatusPayloads?.has(payload) ? { fromProgramStatus: true } : {})
           })
         } catch (err) {
           console.error('[runtime] terminal agent status listener threw', {
@@ -129,6 +154,13 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
           })
         }
       }
+    }
+  }
+
+  /** The PTY's program ended: drop its live facet (done/error stay). Call while its panes resolve. */
+  protected clearLiveProgramStatusFacet(ptyId: string): void {
+    if (this.liveProgramStatusFacetPtyIds.has(ptyId)) {
+      this.emitTerminalAgentStatusEvents(ptyId, { payloads: [], programStatusFacet: null })
     }
   }
 

@@ -145,6 +145,8 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
         pty.wslDistro = null
       }
       if (replacesExistingRuntimeGeneration && postSpawnSequence === 0) {
+        // The replaced process's live facet says nothing about its successor.
+        this.clearLiveProgramStatusFacet(ptyId)
         this.resetTrackedTerminalStateForProviderGeneration(ptyId)
       }
     }

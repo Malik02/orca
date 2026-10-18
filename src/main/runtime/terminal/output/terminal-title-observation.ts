@@ -54,6 +54,29 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     }
   }
 
+  /** The PTY's agent status under this title: the program's own OSC 7501 activity while it
+   *  reports one, else what the title glyph says. */
+  protected classifyPtyTitleStatus(ptyId: string, rawTitle: string): AgentStatus | null {
+    return (
+      this.ptyTitleTrackersByPtyId.get(ptyId)?.programActivity ??
+      detectAgentStatusFromTitle(rawTitle)
+    )
+  }
+
+  /** Re-applies the current title under the program's new activity, so the status-driven effects
+   *  (tui-idle waiters, delivery, mailbox) see its edges even when the title does not change. */
+  protected applyPtyProgramActivity(ptyId: string, activity: AgentStatus | null): void {
+    const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
+    if (!entry) {
+      return
+    }
+    entry.programActivity = activity
+    const title = this.ptysById.get(ptyId)?.lastOscTitle
+    if (activity !== null && title !== null && title !== undefined) {
+      this.applyTrackedPtyTitle(ptyId, title, title)
+    }
+  }
+
   /** Apply one observed OSC title (raw form) to the PTY and leaf records.
    *  Returns true when what the PTY shows changed: its record, or its display-only clear. */
   protected applyTrackedPtyTitle(
@@ -77,7 +100,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     // that contract local, since every activity-gated effect below is keyed on status.
     const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
     const recordedTitle = identityOnlyTitle ? null : normalizedTitle
-    const agentStatus = identityOnlyTitle ? null : detectAgentStatusFromTitle(rawTitle)
+    const agentStatus = identityOnlyTitle ? null : this.classifyPtyTitleStatus(ptyId, rawTitle)
     // Why before retiring the clear: the lifecycle counts a turn from the status the clear showed.
     this.recordAgentPromptLifecycleState(ptyId, agentStatus)
     let ptyRecordChanged = false
@@ -224,7 +247,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       return false
     }
     const nativeStatus = pty.lastAgentStatus
-    const clearedStatus = detectAgentStatusFromTitle(rawTitle)
+    const clearedStatus = this.classifyPtyTitleStatus(ptyId, rawTitle)
     const observedAt = this.nextTitleObservationSequence()
     const previousTitle = pty.titleDisplayClear?.title ?? pty.lastOscTitle
     pty.titleDisplayClear = { title: normalizedTitle, observedAt, observedAtEpochMs: Date.now() }
