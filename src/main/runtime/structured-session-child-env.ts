@@ -64,6 +64,8 @@ import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-mar
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
+import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
+import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
 import { resolveStructuredWorkerIdentityForSession } from './structured-worker-authority'
 
 /**
@@ -164,4 +166,38 @@ function applyThisAppCli(env: Record<string, string>): void {
       "[structured-session] This app's CLI launcher did not resolve; the session's child has no ORCA_CLI_COMMAND."
     )
   }
+}
+
+/** What the agent's own commands need to act as this session and reach this app. Never PATH. */
+const SESSION_COMMAND_ENV_KEYS = [
+  ORCA_AGENT_SESSION_ID_ENV,
+  ORCA_STRUCTURED_SESSION_ENV,
+  'ORCA_TERMINAL_HANDLE',
+  'ORCA_CLI_COMMAND',
+  'ORCA_USER_DATA_PATH',
+  ...REMOTE_RUNTIME_SELECTOR_ENV_KEYS,
+  NATIVE_CHAT_SCRATCH_DIR_ENV
+] as const
+
+/**
+ * The sealed child's session values its agent must hand on to each command it runs. A provider
+ * that rebuilds a command's env from its own policy (Codex `shell_environment_policy`) drops them
+ * otherwise, and the command can no longer say which session it speaks for.
+ */
+export function structuredSessionCommandEnv(
+  child: SealedStructuredSessionChild
+): Record<string, string> {
+  const deleted = new Set(child.envToDelete)
+  const commandEnv: Record<string, string> = {}
+  for (const key of SESSION_COMMAND_ENV_KEYS) {
+    const value = child.env[key]
+    if (value !== undefined && !deleted.has(key)) {
+      commandEnv[key] = value
+    }
+  }
+  // Only a worker's own handle: any other was inherited from the pane that started Orca.
+  if (!isStructuredWorkerHandle(commandEnv.ORCA_TERMINAL_HANDLE)) {
+    delete commandEnv.ORCA_TERMINAL_HANDLE
+  }
+  return commandEnv
 }
