@@ -226,16 +226,15 @@ describe('workspace list focus ownership', () => {
       !press('ArrowDown', { metaKey: true, shiftKey: true }, target).defaultPrevented
     expect([composer, field].map(fieldKeepsChord)).toEqual([true, true])
 
-    const navigateDown = ['Mod+Shift+ArrowDown', 'Ctrl+Alt+ArrowDown', 'Alt+L']
+    const navigateDown = ['Mod+Shift+ArrowDown', 'Ctrl+Alt+ArrowDown', 'Alt+ArrowDown', 'Alt+L']
     Object.assign(state, { keybindings: { 'worktree.navigateDown': navigateDown } })
     act(() => root.render(<Probe />))
     expect([composer, field].map(fieldKeepsChord)).toEqual([true, true])
     // Option+L composes a character on Mac, so the field keeps it even when bound.
     press('¬', { code: 'KeyL', altKey: true }, composer)
     expect(activate).not.toHaveBeenCalled()
-    for (const target of [composer, field]) {
-      press('ArrowDown', { ctrlKey: true, altKey: true }, target)
-    }
+    press('ArrowDown', { altKey: true }, composer)
+    press('ArrowDown', { ctrlKey: true, altKey: true }, field)
     expect(activate.mock.calls.map(([id]) => id)).toEqual(['b', 'c'])
     expect(reachedField).toHaveBeenCalledTimes(2)
   })

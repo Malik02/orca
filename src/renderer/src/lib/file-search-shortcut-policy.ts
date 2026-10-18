@@ -74,11 +74,15 @@ export function textFieldClaimsActionKey(
     return false
   }
   const platform = getShortcutPlatform()
-  // Why: AltGr and Mac Option without Cmd/Ctrl compose text, which no binding may swallow.
+  // Why: AltGr and Mac Option chords that type a character or dead key stay with the field.
   if (
     event.altGraph ||
     event.getModifierState?.('AltGraph') ||
-    (platform === 'darwin' && event.altKey && !event.metaKey && !event.ctrlKey)
+    (platform === 'darwin' &&
+      event.altKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      (event.key?.length === 1 || event.key === 'Dead'))
   ) {
     return true
   }
