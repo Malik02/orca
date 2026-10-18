@@ -7,7 +7,7 @@ import { SKILL_INSTALL_CAPABILITY } from '../../../shared/skill-install-capabili
 
 /**
  * Electron (`main-process-*`) and orcad (`orcad-entry.ts`) each compose the same runtime, and every
- * dependency is optional, so one root can silently skip a service the other wires (C2: #30120 never
+ * dependency is optional, so one root can silently skip a service the other wires (#30120 never
  * gave orcad its web client root). This records what each root's source wires and fails on any
  * difference that is not declared below with a reason.
  */
@@ -18,7 +18,7 @@ type DeclaredDifference = {
   wiring: string
   missingOn: Root
   reason: string
-  /** Capabilities the missing host still advertises; its methods must refuse accurately (D3). */
+  /** Capabilities the missing host still advertises; its methods must refuse accurately. */
   advertisedUnserved?: readonly string[]
 }
 
@@ -148,29 +148,37 @@ const SPREAD_SOURCES: Record<string, { file: string; anchor: string }> = {
 const repoRoot = join(__dirname, '../../../..')
 const read = (file: string): string => stripComments(readFileSync(join(repoRoot, file), 'utf8'))
 
+const QUOTES = `'"\``
+
+/** The index of the quote that closes the string opening at `open` (or the end of the source). */
+function stringEnd(source: string, open: number): number {
+  for (let i = open + 1; i < source.length; i++) {
+    if (source[i] === '\\') {
+      i++
+    } else if (source[i] === source[open]) {
+      return i
+    }
+  }
+  return source.length
+}
+
 function stripComments(source: string): string {
   let out = ''
-  let quote: string | null = null
   for (let i = 0; i < source.length; i++) {
     const char = source[i]
-    if (quote) {
-      out += char
-      if (char === '\\') {
-        out += source[++i] ?? ''
-      } else if (char === quote) {
-        quote = null
-      }
+    if (QUOTES.includes(char)) {
+      const end = stringEnd(source, i)
+      out += source.slice(i, end + 1)
+      i = end
     } else if (char === '/' && source[i + 1] === '/') {
       while (i < source.length && source[i] !== '\n') {
         i++
       }
       out += '\n'
     } else if (char === '/' && source[i + 1] === '*') {
-      i = source.indexOf('*/', i + 2) + 1
+      const end = source.indexOf('*/', i + 2)
+      i = end === -1 ? source.length : end + 1
     } else {
-      if (char === "'" || char === '"' || char === '`') {
-        quote = char
-      }
       out += char
     }
   }
@@ -180,19 +188,10 @@ function stripComments(source: string): string {
 /** The inner text of the brace group that opens at `open` (strings are opaque). */
 function braceGroup(source: string, open: number): string {
   let depth = 0
-  let quote: string | null = null
   for (let i = open; i < source.length; i++) {
     const char = source[i]
-    if (quote) {
-      if (char === '\\') {
-        i++
-      } else if (char === quote) {
-        quote = null
-      }
-      continue
-    }
-    if (char === "'" || char === '"' || char === '`') {
-      quote = char
+    if (QUOTES.includes(char)) {
+      i = stringEnd(source, i)
     } else if (char === '{') {
       depth++
     } else if (char === '}' && --depth === 0) {
@@ -218,20 +217,11 @@ function objectLiteralAfter(source: string, anchor: string): string {
 function topLevelEntries(inner: string): string[] {
   const entries: string[] = []
   let depth = 0
-  let quote: string | null = null
   let start = 0
   for (let i = 0; i < inner.length; i++) {
     const char = inner[i]
-    if (quote) {
-      if (char === '\\') {
-        i++
-      } else if (char === quote) {
-        quote = null
-      }
-      continue
-    }
-    if (char === "'" || char === '"' || char === '`') {
-      quote = char
+    if (QUOTES.includes(char)) {
+      i = stringEnd(inner, i)
     } else if ('({['.includes(char)) {
       depth++
     } else if (')}]'.includes(char)) {

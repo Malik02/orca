@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   WORKTREE_ID_SEPARATOR,
+  composeWorktreeId,
   getRepoIdFromWorktreeId,
   getRepoMainWorktreeId,
   getWorktreePathBasenameFromId,
@@ -19,6 +20,19 @@ describe('getRepoMainWorktreeId', () => {
       const worktreeId = getRepoMainWorktreeId(repo)
       expect(worktreeId).toBe(`${repo.id}${WORKTREE_ID_SEPARATOR}${repo.path}`)
       expect(splitWorktreeId(worktreeId)).toEqual({ repoId: repo.id, worktreePath: repo.path })
+    }
+  })
+})
+
+describe('composeWorktreeId', () => {
+  it('keeps the path spelling exactly as given', () => {
+    for (const path of [
+      '/srv/Repo/',
+      'C:\\Users\\me\\repo',
+      '//wsl$/Ubuntu/home/a',
+      '/private/tmp/x'
+    ]) {
+      expect(composeWorktreeId('repo-1', path)).toBe(`repo-1${WORKTREE_ID_SEPARATOR}${path}`)
     }
   })
 })

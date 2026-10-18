@@ -37,10 +37,8 @@ import {
   removeWorktree
 } from '../../git/worktree'
 import * as gitRunner from '../../git/runner'
-import {
-  WORKTREE_PROCESS_SWEEP_TIMEOUT_MS,
-  WORKTREE_TEARDOWN_RPC_MARGIN_MS
-} from '../worktree-teardown'
+import { WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from '../worktree-teardown'
+import { WORKTREE_TEARDOWN_RPC_MARGIN_MS } from '../worktree-teardown-deadline'
 import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../../git/status'
 import { getEffectiveHooks, hasHooksFile, loadHooks, parseOrcaYaml, runHook } from '../../hooks'
 import { createSetupRunnerScript, resolveSetupRunnerShell } from '../../worktree-runner-script'
@@ -64,7 +62,7 @@ import {
 } from '../orca-runtime'
 import { RUNTIME_GRAPH_RELOAD_TIMEOUT_MS } from '../runtime-graph-reload-lifecycle'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
-import { getBrowserHostLeaseRegistry } from '../browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
 import {
   appendRecentPtyPathCandidates,
   recentTerminalPathCandidatesIncludePath,

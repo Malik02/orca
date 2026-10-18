@@ -400,6 +400,18 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/check-path-literal-ratchet.mjs
 
+      - name: Enforce worktree-id composer ratchet
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node config/scripts/check-worktree-id-composer-ratchet.mjs
+
+      - name: Enforce e2e typecheck ratchet
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node config/scripts/check-e2e-typecheck-ratchet.mjs
+
+      - name: Enforce legacy relay fence ratchet
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node config/scripts/check-legacy-relay-fence-ratchet.mjs
+
       - name: Check Node runtime pin
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/check-node-runtime-pin.mjs
@@ -1443,7 +1455,7 @@ jobs:
           src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts
           src/main/ipc/preflight-provider-command-selection.test.ts
           src/main/ipc/preflight-runnable-local-cli.test.ts
-          src/main/ssh/remote-node-runtime-store-windows.test.ts
+          src/main/managed-server/install/remote-node-runtime-store-windows.test.ts
 
       # Why the :parallel variant: identical to build:release except the three
       # electron-vite targets overlap instead of running back to back. The Linux package

@@ -7,10 +7,13 @@ import type { AcpAgentConnection } from '../acp/acp-agent-connection'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { RevisionedState } from '../runtime/revisioned-state'
 import { antigravityBrowserHelperWorks } from './antigravity-browser-helper'
+import { AcpLaunchGate } from '../acp/acp-launch-gate'
 
 type SignInOwner = Pick<AcpAgentConnection, 'close' | 'onExit' | 'exited'>
 const retained = new ProviderAcquisitionStarts<SignInOwner>()
 const folder = hostFolderAccountBinding('GEMINI_HOME', 'antigravity-chat', ['antigravity-acp'])
+
+export const ANTIGRAVITY_LAUNCH_GATE = new AcpLaunchGate('Antigravity')
 
 /** A failure whose message is already the sentence a person reads. */
 export class AntigravitySignInSentence extends Error {}
@@ -48,6 +51,7 @@ export async function closeAntigravitySignInOwner(
 ): Promise<void> {
   if (!(await connection.close().catch(() => false)) && !connection.exited) {
     retained.retainFailed(home, connection)
+    ANTIGRAVITY_LAUNCH_GATE.retain(connection)
     throw new AntigravitySignInCloseUnprovenError()
   }
 }

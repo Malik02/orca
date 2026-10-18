@@ -76,6 +76,9 @@ export const SESSION_TAB_METHODS = [
         ...(params.agentPrompt !== undefined ? { agentPrompt: params.agentPrompt } : {}),
         ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
         ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+        ...(params.resumeProviderSession
+          ? { resumeProviderSession: params.resumeProviderSession }
+          : {}),
         ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
         ...(params.viewMode ? { viewMode: params.viewMode } : {}),
         activate: params.activate,

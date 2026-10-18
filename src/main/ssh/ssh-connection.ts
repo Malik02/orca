@@ -23,12 +23,11 @@ import type {
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
 import {
   getOrcaControlSocketPath,
-  spawnSystemSshCommand,
+  isOpenSshConfigBackedTarget,
   type SystemSshBuildArgsOptions
-} from './ssh-system-fallback'
-import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
+} from './system-transport/system-ssh-args'
+import { spawnSystemSshCommand } from './system-transport/system-ssh-command'
 import { removeControlSocketPath } from './ssh-control-socket'
-import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 import {
   INITIAL_RETRY_ATTEMPTS,
   INITIAL_RETRY_DELAY_MS,
@@ -57,7 +56,12 @@ import {
   orderServerHostKeyAlgorithms
 } from './ssh-host-key-verifier'
 import { HostKeyVerificationError, isHostKeyVerificationError } from './ssh-host-key-decision'
-import { siteConfigMayRestrictHostKeys, sshGArgsForHost } from './ssh-g-config-resolution'
+import {
+  resolveWithSshG,
+  siteConfigMayRestrictHostKeys,
+  sshGArgsForHost,
+  type SshResolvedConfig
+} from './config/ssh-g-config-resolution'
 import {
   boundSshHostKeyStoreFile,
   loadTrustedHostKeys,
@@ -69,7 +73,7 @@ import {
   loadKnownHostsEvidence,
   resolveKnownHostsFiles,
   resolveKnownHostsLookupHost
-} from './ssh-known-hosts-source'
+} from './config/ssh-known-hosts-source'
 import {
   createCancelledConnectAttemptError,
   isCancelledConnectAttemptError
@@ -79,7 +83,7 @@ import {
   isTransientReconnectError
 } from './ssh-reconnect-error-classification'
 import { SshReconnectLadder } from './ssh-reconnect-ladder'
-import { mayUserSshConfigClaimAlias } from './ssh-config-alias-claim'
+import { mayUserSshConfigClaimAlias } from './config/ssh-config-alias-claim'
 import {
   didDeferKeyboardInteractive,
   didOfferKeyboardInteractive,
@@ -95,7 +99,6 @@ import { tagSftpHandshakeCorruption } from './sftp-handshake-corruption'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import { isEphemeralRuntimeSshOwner } from '../../shared/managed-orcad-ssh-owner'
 import { isSshUserDisconnected } from './ssh-user-disconnect'
-export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
 /** The sign-in a connection holds in memory, handed to the connection that replaces it. */
 export type SshCachedCredentials = { password: string | null; passphrase: string | null }
@@ -1611,5 +1614,3 @@ export class SshConnection {
     this.callbacks.onStateChange(this.target.id, { ...this.state })
   }
 }
-
-export { shouldUseSystemSshTransport } from './ssh-transport-selection'

@@ -147,7 +147,7 @@ export const sshHostServerMoveSchema = z
   })
   .strict()
 
-// COMPAT(legacy-relay-bridge): revisit 2027-01-15; drop with src/main/ssh/legacy-relay-bridge/.
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15; drop with src/main/ssh/legacy-relay/.
 export const SSH_HOST_SERVER_LEGACY_RELAY_BRIDGE_TERMINAL_VALUES = [
   'none',
   '1',

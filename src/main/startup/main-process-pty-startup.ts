@@ -108,6 +108,7 @@ async function sweepRestoredStatusesAgainstLocalPtys(): Promise<void> {
     getBoundPtyIdForPaneKey: getPtyIdForPaneKey,
     getPersistedPtyIdForPaneKey: (paneKey) => persistedPtyIdByPaneKey.get(paneKey)
   })
+  await state.runtime?.sidebarFacts?.reconcileSortStampTiers(provider)
 }
 
 export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {

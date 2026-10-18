@@ -387,7 +387,8 @@
         "loopbackPairingBlocked": "Este enlace de acceso apunta de nuevo a este dispositivo.",
         "remotePairingUnreachable": "No se puede acceder a Orca en {{endpoint}}.",
         "remotePairingInvalidDetails": "Este enlace de acceso contiene datos de conexión no válidos.",
-        "remotePairingSaveFailed": "Orca verificó al anfitrión, pero no pudo guardarlo. Compruebe el almacenamiento del navegador e inténtelo de nuevo."
+        "remotePairingSaveFailed": "Orca verificó al anfitrión, pero no pudo guardarlo. Compruebe el almacenamiento del navegador e inténtelo de nuevo.",
+        "remotePairingRepairUnavailable": "Re-pairing is not available in the browser. Pair this browser with the server again."
       },
       "web": {
         "preload": {
@@ -4201,7 +4202,14 @@
             "runtime_unavailable_explanation": "Es posible que el host remoto todavía esté ejecutándose; sólo la conexión en tiempo de ejecución de Orca no está disponible.",
             "contact_note": "Es posible que el host todavía esté ejecutándose; sólo la conexión Orca no está disponible.",
             "last_connected": "Última conexión {{value0}}",
-            "reconnect_attempt": "Intento {{value0}}"
+            "reconnect_attempt": "Intento {{value0}}",
+            "access_revoked": "Access revoked",
+            "access_revoked_summary": "This server revoked access for this computer",
+            "access_revoked_explanation": "Re-pair with a new pairing link from the server to reconnect.",
+            "update_required": "Update required",
+            "update_required_summary": "Orca versions are not compatible",
+            "update_required_explanation": "Update Orca on this computer or on the server, then connect again.",
+            "repair": "Re-pair…"
           },
           "provider": {
             "extra": {
@@ -5866,7 +5874,8 @@
           "sidebarRowMissing": "El destino ya no existe",
           "failedUnnestWorkspace": "Error al expandir el espacio de trabajo",
           "groupRenameFailed": "No se pudo cambiar el nombre del grupo",
-          "groupRenameFailedDesc": "Orca no pudo confirmar el nuevo nombre con el anfitrión del grupo. Vuelva a verificar el grupo después de volver a conectarse."
+          "groupRenameFailedDesc": "Orca no pudo confirmar el nuevo nombre con el anfitrión del grupo. Vuelva a verificar el grupo después de volver a conectarse.",
+          "hostRepairRequired": "Re-pair required"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",
@@ -6290,7 +6299,8 @@
           "59b553e2aa": "Desconectar",
           "2d3e4f5a6b": "Verificar conexión",
           "3c4d5e6f7a": "Administrar host…",
-          "6e7f8a9b0c": "Quitar host…"
+          "6e7f8a9b0c": "Quitar host…",
+          "repair": "Re-pair…"
         },
         "WorkspaceKanbanDrawer": {
           "1975a4e480": "Falló la sincronización del estado de la tarea",
@@ -8383,7 +8393,11 @@
           "serverWorkspaceWindowClosed": "Ventana del espacio de trabajo cerrada",
           "serverRuntimeUnavailable": "Orca no disponible",
           "serverRuntimeUnavailableDescription": "El transporte SSH está conectado, pero el tiempo de ejecución de Orca no respondió. Es posible que el host todavía esté ejecutándose.",
-          "serverReconnecting": "Reconectando"
+          "serverReconnecting": "Reconectando",
+          "accessRevoked": "{{value0}} no longer accepts this computer. Re-pair it with a new access link.",
+          "repair": "Re-pair…",
+          "serverAccessRevoked": "Access revoked",
+          "orcaVersionLastSeen": "Orca v{{value0}} (last seen)"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copiar {{value0}}"
@@ -12074,7 +12088,9 @@
           "networkConnection": "Conexión de red",
           "notAttempted": "No se intentó",
           "saveFailed": "No se pudo guardar el host",
-          "saveFailedHelp": "El anfitrión fue verificado, pero Orca no pudo salvarlo. Verifique el nombre y el almacenamiento de la configuración local y vuelva a intentarlo."
+          "saveFailedHelp": "El anfitrión fue verificado, pero Orca no pudo salvarlo. Verifique el nombre y el almacenamiento de la configuración local y vuelva a intentarlo.",
+          "differentServer": "This link is for a different server",
+          "differentServerHelp": "This pairing link is for a different server. Create the link on the server you are re-pairing."
         },
         "CloudVmSetupGuide": {
           "title": "Crear una VM en la nube",
@@ -12644,6 +12660,13 @@
           "remove": "Quitar",
           "turnOn": "Activar en Experimental",
           "forceUpdate": "Forzar actualización"
+        },
+        "RuntimeRepairDialog": {
+          "title": "Re-pair {{name}}",
+          "description": "{{name}} no longer accepts this computer. On {{name}}, open Settings → Remote Orca Servers → Share this host, create a link for another Orca client, then paste it here.",
+          "submit": "Re-pair",
+          "success": "Re-paired with {{name}}",
+          "failed": "Re-pair failed"
         }
       },
       "right": {
@@ -19186,7 +19209,6 @@
       "keywordIssuePicker": "selector de incidencias"
     },
     "managed-runtime": {
-      "cancel": "Cancelar instalación",
       "cancelled": "Instalación cancelada.",
       "cancelling": "Cancelando…",
       "damaged": "Esta copia de {{agent}} está dañada.",
@@ -19203,10 +19225,17 @@
       "notInstalled": "No instalado.",
       "progress": "Descarga de {{agent}}",
       "readFailed": "No se pudo comprobar {{agent}} en este host. Reintentando.",
-      "reinstall": "Reinstalar {{agent}}",
+      "reinstall": "Reinstalar",
+      "remove": "Quitar el runtime descargado",
+      "removeConfirm": "Quitar",
+      "removeDescription": "Los chats de {{agent}} en curso se detienen. Su historial se conserva.",
+      "removeKeep": "Cancelar",
+      "removeTitle": "¿Quitar el runtime de {{agent}} descargado de {{host}}?",
+      "removing": "Quitando…",
       "retry": "Reintentar instalación",
+      "thisComputer": "este equipo",
       "unavailable": "{{agent}} no está disponible en este host.",
-      "update": "Actualizar {{agent}}",
+      "update": "Actualizar",
       "verifying": "Comprobando el entorno descargado.",
       "installTitle": "Instala {{agent}} para empezar a chatear",
       "continueTitle": "Instala {{agent}} para continuar",

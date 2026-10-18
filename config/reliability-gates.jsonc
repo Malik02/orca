@@ -1396,20 +1396,20 @@
       "invariant": "Failed bootstrap and authenticated reconnect converge without UI triggers; one connection owner publishes verified status, with no independent healthy status polling.",
       "oracle": "Observe automatic recovery, retained runtime identity on failure, ordered publications, exact request counts, isolated viewer outages, and retirement on disconnect.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/runtime-host-status-owner.test.ts src/main/ipc/runtime-environment-status-recovery.test.ts src/main/ipc/runtime-environment-status-connection.test.ts src/renderer/src/store/slices/runtime-status-snapshot.test.ts src/renderer/src/web/web-runtime-status-owner.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/runtime-host-status-owner.test.ts src/main/ipc/runtime-environments/runtime-environment-status-recovery.test.ts src/main/ipc/runtime-environments/runtime-environment-status-connection.test.ts src/renderer/src/store/slices/runtime-status-snapshot.test.ts src/renderer/src/web/web-runtime-status-owner.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_WEB_CLIENT=1 pnpm exec playwright test tests/e2e/runtime-host-status-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/shared/runtime-host-status-owner.test.ts",
-        "src/main/ipc/runtime-environment-status-recovery.test.ts",
-        "src/main/ipc/runtime-environment-status-connection.test.ts",
+        "src/main/ipc/runtime-environments/runtime-environment-status-recovery.test.ts",
+        "src/main/ipc/runtime-environments/runtime-environment-status-connection.test.ts",
         "src/renderer/src/store/slices/runtime-status-snapshot.test.ts",
         "src/renderer/src/web/web-runtime-status-owner.test.ts",
         "tests/e2e/runtime-host-status-recovery.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/main/ipc/runtime-environment-status-recovery.test.ts",
+          "file": "src/main/ipc/runtime-environments/runtime-environment-status-recovery.test.ts",
           "assertions": [
             "recovers a saved host after its first status check fails, without another UI request"
           ]
@@ -4301,16 +4301,16 @@
       "invariant": "One relay host may have at most one assignment attempt or retry timer per recovery path. Sustained director failure must increase the retry window up to five minutes, a bounded Retry-After must be respected during initial setup and drain recovery, shutdown must cancel pending work, and recovery must activate the authoritative assigned origin.",
       "oracle": "Inject duplicate drain events, deterministic randomness, fake time, repeated assignment failures, a 30-second Retry-After during initial setup and drain recovery, broker close, and eventual director recovery. Count every assignment call, require 500 ms then 1,000 ms retry windows, reject duplicate fanout, require no pre-hint retry or post-close work, and prove the recovered cell becomes authoritative.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/relay/relay-session-broker.test.ts src/main/runtime/relay/relay-http-client.test.ts src/main/runtime/relay/relay-auth-coordinator-recovery.test.ts --reporter=dot"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/mobile-cloud-relay/relay-session-broker.test.ts src/main/runtime/mobile-cloud-relay/relay-http-client.test.ts src/main/runtime/mobile-cloud-relay/relay-auth-coordinator-recovery.test.ts --reporter=dot"
       ],
       "testFiles": [
-        "src/main/runtime/relay/relay-session-broker.test.ts",
-        "src/main/runtime/relay/relay-http-client.test.ts",
-        "src/main/runtime/relay/relay-auth-coordinator-recovery.test.ts"
+        "src/main/runtime/mobile-cloud-relay/relay-session-broker.test.ts",
+        "src/main/runtime/mobile-cloud-relay/relay-http-client.test.ts",
+        "src/main/runtime/mobile-cloud-relay/relay-auth-coordinator-recovery.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/main/runtime/relay/relay-session-broker.test.ts",
+          "file": "src/main/runtime/mobile-cloud-relay/relay-session-broker.test.ts",
           "assertions": [
             "duplicate drain notifications share one exponentially backed-off retry schedule",
             "Retry-After suppresses early assignment requests",
@@ -4319,11 +4319,11 @@
           ]
         },
         {
-          "file": "src/main/runtime/relay/relay-http-client.test.ts",
+          "file": "src/main/runtime/mobile-cloud-relay/relay-http-client.test.ts",
           "assertions": ["assignment overload preserves a bounded Retry-After hint"]
         },
         {
-          "file": "src/main/runtime/relay/relay-auth-coordinator-recovery.test.ts",
+          "file": "src/main/runtime/mobile-cloud-relay/relay-auth-coordinator-recovery.test.ts",
           "assertions": ["initial relay setup does not retry before Retry-After expires"]
         }
       ],
@@ -4332,7 +4332,7 @@
           "date": "2026-07-26",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/relay/relay-session-broker.test.ts src/main/runtime/relay/relay-http-client.test.ts src/main/runtime/relay/relay-auth-coordinator-recovery.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/mobile-cloud-relay/relay-session-broker.test.ts src/main/runtime/mobile-cloud-relay/relay-http-client.test.ts src/main/runtime/mobile-cloud-relay/relay-auth-coordinator-recovery.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 0.49,
           "summary": "Three focused relay files passed with 25 assertions."
@@ -5282,16 +5282,16 @@
       "invariant": "Every renderer-held runtime subscription receives exactly one terminal close event when its transport is retired, including when the retirement advanced the transport generation first, and a single failing teardown never abandons that environment's remaining subscriptions nor escapes into the transport that reported the close. Payload frames from a retired transport stay suppressed. A revealed remote terminal therefore reattaches over a live multiplex connection: its buffer restores, typed input reaches the host PTY, the echo paints without a tab flip, and the PTY converges on the revealed pane grid.",
       "oracle": "The main IPC contract test subscribes terminal.multiplex through the real handler, disconnects the environment, and asserts the renderer received exactly one {type: close} subscription event. Two isolation tests subscribe a second stream to the same environment and make the first one fail -- in its socket close, and in the liveness probe inside notifyClosed -- then assert the disconnect does not throw, both transports closed, and every close the renderer could still receive was delivered. A third drives a host-initiated close through the transport callback, which is the one notifyClosed call site with no surrounding guard, with a renderer send that throws, and asserts it cannot escape into the WebSocket close handler. A fourth test asserts that after retirement a late response frame is not forwarded and a late transport close does not re-send. The paired-server journey runs three reveal scenarios against one real host and one real paired desktop client, and for each records buffer restore, host-side receipt of the typed marker through an out-of-band host sink file, live paint without a tab flip, and PTY-versus-pane grid convergence.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/runtime-environments-subscription-teardown.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/runtime-environments/runtime-environments-subscription-teardown.test.ts",
         "pnpm exec playwright test tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
-        "src/main/ipc/runtime-environments-subscription-teardown.test.ts",
+        "src/main/ipc/runtime-environments/runtime-environments-subscription-teardown.test.ts",
         "tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/main/ipc/runtime-environments-subscription-teardown.test.ts",
+          "file": "src/main/ipc/runtime-environments/runtime-environments-subscription-teardown.test.ts",
           "assertions": [
             "tells the renderer when retiring the transport closes its streaming subscription (the load-bearing repro; red with the fix reverted)",
             "retires an environment's remaining subscriptions when one teardown throws (load-bearing; red without per-subscription isolation)",
@@ -5315,7 +5315,7 @@
           "date": "2026-08-03",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/runtime-environments-subscription-teardown.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/runtime-environments/runtime-environments-subscription-teardown.test.ts",
           "result": "passed",
           "durationSeconds": 0.81,
           "summary": "53 runtime environment IPC tests passed, including the new close-delivery, both teardown-isolation, transport-path containment, and stale-payload-suppression contracts."
@@ -6326,30 +6326,30 @@
       "oracle": "Attach two browser hosts and require unqualified selection to fail ambiguous while exact selection succeeds. Reject a second identity on one connection and a fifth identity for one paired device, release one exact lease, then admit its replacement without starving another device. Admit four hosts from one authenticated device and a host from a second, reject the first device's fifth host, and release only the first device's exact counters while the second remains live. Fill asks and hosts to their shared ceiling, retain a quarter of the total budget for ordinary waits, close both sockets, and prove every global, class, and device counter releases. Reject one initial host attach with the unchanged runtime_busy response, then require bounded client-specific jitter to attach when capacity returns; repeated rejection and explicit close must release every timer and subscription. Replace one same-device connection, require the old subscription and route to fence, then prove late old cleanup leaves the new generation live. Mint an exact execution-host grant, reject a different key, prove late old grant cleanup leaves its replacement, and invalidate every grant with lease replacement. Reject client-to-client, client-to-server, server-to-server, and server-to-client placement overwrite until exact retirement. Begin retirement once idempotently, reject client use and every replacement while pending, cancel the exact token to restore the same placement, and reject delayed cancellation or completion after a newer retirement begins. On explicit release, replacement, legacy disconnect, and reconnect-grace expiry, require only the exact host generation's client placements to become non-cancellable retirement-pending before lease settlement; preserve negotiated grace, other hosts, server placements, replacements, and capacity until exact completion. Complete only the exact pending token, retain capacity until completion, and require a reused client page ID to receive a higher global generation without retaining a tombstone. Require a client page through the exact runtime, epoch, host, and page tuple; reject every mismatch, released or replaced leases, retirement-pending pages, retired pages, server placements, invalid identities, and the 257th live placement. Admit 16 pending destination opens and reject the seventeenth until one connects; admit 128 opens in one monotonic 10-second window and reject the 129th until the window expires. Fill 8 MiB across destination-to-client queues and separately across unsettled client-to-destination writes, release one exact retired stream, admit one replacement, and require the next byte claim to close the route without stale-callback or reentrant-close underflow. Across multiple routes, charge application copies, encrypted queue entries, and dynamic native socket bytes to one 32 MiB browser-host and 128 MiB process ceiling; reject zero-byte claim/socket-source floods, fence released leases, synchronously release JavaScript queue claims while retaining native claims through exact socket close, and yield a parked queue after four frames without reordering. Route nested responses by exact ID under reordering, reject unknown and duplicate IDs, cap pending requests and queued bytes, and tear down every concurrent waiter once on timeout or close. Drive one real paired attach, command, and result through one exact connection ID; reject missing send support and malformed or wrong-runtime acknowledgements while preserving old non-v1 attaches. Drop an authenticated transport, require the same listener to reject CONNECT before and during reconnect, attach the exact existing native v1 payload and capability pair to a strictly newer generation, ignore late old callbacks, and roll an exhausted stream-ID ledger only by replacing the generation. Require SSH descriptors to add an execution-host capability and exact grant, reject missing grants and stale provider authority before resolver or binary registration, pass exact domains to ssh2 and system-SSH SOCKS without local resolution, sanitize connector diagnostics, and close every stream and standalone route process once on timeout, synchronous failure, or rotation. Drive the accepted lease through real paired E2EE native SOCKS-to-HTTP and ephemeral Docker ssh2 remote-only DNS journeys, then exercise exact frame, credit, half-close, stale-stream, remote-DNS, unsupported-command, offline, and teardown assertions.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/browser/browser-client-page-unavailability.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/runtime/runtime-browser-client-page-recovery.test.ts src/main/runtime/rpc/methods/session-tab-browser-placement-mutations.test.ts src/main/runtime/rpc/methods/session-tab-browser-placement-projection.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-page-retirement.test.ts src/main/runtime/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host-page-placement.test.ts src/main/runtime/browser-host-lease-registry.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host-page-retirement.test.ts src/main/runtime/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host-page-placement.test.ts src/main/runtime/browser-host-lease-registry.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-page-reconciliation-plan.test.ts src/main/runtime/browser-host-page-reconciliation-executor.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-page-reconciliation-orchestration.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-page-placement.test.ts src/main/runtime/browser-host-lease-registry.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-reconciliation-protocol.test.ts src/main/browser/paired-runtime-browser-host-reconciliation-negotiation.test.ts src/main/runtime/rpc/methods/browser-client-host-reconciliation.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-inventory.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/browser-host-page-retirement.test.ts src/main/runtime/browser-host/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host/browser-host-page-placement.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host/browser-host-page-retirement.test.ts src/main/runtime/browser-host/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host/browser-host-page-placement.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/browser-host-page-reconciliation-plan.test.ts src/main/runtime/browser-host/browser-host-page-reconciliation-executor.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/browser-host-page-reconciliation-orchestration.test.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts src/main/runtime/browser-host/browser-host-page-placement.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-reconciliation-protocol.test.ts src/main/browser/paired-runtime-browser-host-reconciliation-negotiation.test.ts src/main/runtime/rpc/methods/browser-client-host-reconciliation.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-inventory.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/browser-host/browser-host-page-reconciliation-plan.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-host-reconciliation-command-order.test.ts src/main/browser/browser-client-page-reconciliation-adapters.test.ts src/main/browser/browser-route-prepared-page-rekey.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/runtime-binary-message-router.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/remote-browser-socks-server.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-client.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-subscription-request.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host-registry.test.ts src/main/browser/paired-runtime-browser-client-host-runtime.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-session-startup.test.ts src/main/ipc/runtime-environments-subscription-teardown.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/browser-network-deferred-socket.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/ssh-browser-network-execution-route.test.ts src/main/browser/system-ssh-socks-client-socket.test.ts src/main/ssh/system-ssh-dynamic-forward-process.test.ts src/shared/browser-client-host-protocol.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ssh/ssh-system-fallback.test.ts src/main/ssh/ssh-port-forward.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host-registry.test.ts src/main/browser/paired-runtime-browser-client-host-runtime.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-session-startup.test.ts src/main/ipc/runtime-environments/runtime-environments-subscription-teardown.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/browser/browser-network-deferred-socket.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/ssh-browser-network-execution-route.test.ts src/main/browser/system-ssh-socks-client-socket.test.ts src/main/ssh/system-transport/system-ssh-dynamic-forward-process.test.ts src/shared/browser-client-host-protocol.test.ts src/main/ssh/system-transport/system-ssh-forward-process.test.ts src/main/ssh/system-transport/system-ssh-operations.test.ts src/main/ssh/port-forwarding/ssh-port-forward.test.ts",
         "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts",
         "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 node_modules/.bin/vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts"
       ],
@@ -6362,16 +6362,16 @@
         "src/shared/browser-client-host-protocol.test.ts",
         "src/shared/browser-client-host-reconciliation-protocol.test.ts",
         "src/shared/browser-network-tunnel-protocol.test.ts",
-        "src/main/runtime/browser-host-lease-placement-retirement.test.ts",
-        "src/main/runtime/browser-host-page-retirement.test.ts",
-        "src/main/runtime/browser-host-page-placement-replacement.test.ts",
-        "src/main/runtime/browser-host-page-placement.test.ts",
-        "src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
-        "src/main/runtime/browser-host-page-reconciliation-executor.test.ts",
-        "src/main/runtime/browser-host-page-reconciliation-orchestration.test.ts",
-        "src/main/runtime/browser-host-command-ledger.test.ts",
-        "src/main/runtime/browser-host-command-ledger-capacity.test.ts",
-        "src/main/runtime/browser-host-lease-registry.test.ts",
+        "src/main/runtime/browser-host/browser-host-lease-placement-retirement.test.ts",
+        "src/main/runtime/browser-host/browser-host-page-retirement.test.ts",
+        "src/main/runtime/browser-host/browser-host-page-placement-replacement.test.ts",
+        "src/main/runtime/browser-host/browser-host-page-placement.test.ts",
+        "src/main/runtime/browser-host/browser-host-page-reconciliation-plan.test.ts",
+        "src/main/runtime/browser-host/browser-host-page-reconciliation-executor.test.ts",
+        "src/main/runtime/browser-host/browser-host-page-reconciliation-orchestration.test.ts",
+        "src/main/runtime/browser-host/browser-host-command-ledger.test.ts",
+        "src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts",
+        "src/main/runtime/browser-host/browser-host-lease-registry.test.ts",
         "src/main/runtime/runtime-rpc-browser-host-admission.test.ts",
         "src/main/runtime/rpc/methods/browser-client-host.test.ts",
         "src/main/runtime/rpc/methods/browser-client-host-reconciliation.test.ts",
@@ -6393,7 +6393,7 @@
         "src/main/browser/browser-client-page-inventory.test.ts",
         "src/main/browser/browser-route-prepared-page-rekey.test.ts",
         "src/main/browser/browser-session-startup.test.ts",
-        "src/main/ipc/runtime-environments-subscription-teardown.test.ts",
+        "src/main/ipc/runtime-environments/runtime-environments-subscription-teardown.test.ts",
         "src/main/browser/browser-client-host-command-dispatcher.test.ts",
         "src/main/browser/browser-network-tunnel-session.test.ts",
         "src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts",
@@ -6405,8 +6405,8 @@
         "src/main/browser/paired-runtime-browser-network-route.test.ts",
         "src/main/browser/ssh-browser-network-execution-route.test.ts",
         "src/main/browser/system-ssh-socks-client-socket.test.ts",
-        "src/main/ssh/system-ssh-dynamic-forward-process.test.ts",
-        "src/main/ssh/ssh-port-forward.test.ts",
+        "src/main/ssh/system-transport/system-ssh-dynamic-forward-process.test.ts",
+        "src/main/ssh/port-forwarding/ssh-port-forward.test.ts",
         "src/main/browser/remote-browser-socks-server.test.ts",
         "src/main/runtime/runtime-binary-message-router.test.ts",
         "src/main/runtime/rpc/methods/browser-network-tunnel.test.ts",
@@ -6418,7 +6418,7 @@
       ],
       "assertionRefs": [
         {
-          "file": "src/main/runtime/browser-host-lease-placement-retirement.test.ts",
+          "file": "src/main/runtime/browser-host/browser-host-lease-placement-retirement.test.ts",
           "assertions": [
             "terminal release fences exact host-generation placements before lease settlement and makes retirement non-cancellable",
             "terminal fencing upgrades an existing retirement without touching server placements or another host generation",
@@ -6427,7 +6427,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/browser-host-page-retirement.test.ts",
+          "file": "src/main/runtime/browser-host/browser-host-page-retirement.test.ts",
           "assertions": [
             "pending retirement fences exact client-page use and every replacement",
             "retirement begin is idempotent while exact cancellation restores the same authority",
@@ -6438,7 +6438,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/browser-host-page-placement-replacement.test.ts",
+          "file": "src/main/runtime/browser-host/browser-host-page-placement-replacement.test.ts",
           "assertions": [
             "client and server placements cannot overwrite an occupied logical page",
             "occupied page IDs reject replacement before client-host selection",
@@ -6447,7 +6447,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/browser-host-page-placement.test.ts",
+          "file": "src/main/runtime/browser-host/browser-host-page-placement.test.ts",
           "assertions": [
             "client placement requires the exact runtime, epoch, host, and page generation on a live lease",
             "lease release and replacement fence an otherwise matching client placement",
@@ -6456,7 +6456,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
+          "file": "src/main/runtime/browser-host/browser-host-page-reconciliation-plan.test.ts",
           "assertions": [
             "exact current pages retain without navigation while runtime-missing pages restore and client orphans close",
             "profile, execution-host, authority, generation, and outcome-unknown mismatches require a close-before-restore barrier",
@@ -6467,7 +6467,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/browser-host-lease-registry.test.ts",
+          "file": "src/main/runtime/browser-host/browser-host-lease-registry.test.ts",
           "assertions": [
             "multiple live hosts require exact selection instead of first-connected routing",
             "one connection and one paired device cannot retain more than their exact host limits",
@@ -6714,7 +6714,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/browser-host-command-ledger.test.ts",
+          "file": "src/main/runtime/browser-host/browser-host-command-ledger.test.ts",
           "assertions": [
             "server-issued commands are delivered FIFO per page and settle only in exact sequence",
             "reattached delivery replays every unsettled command without replacing its immutable identity",
@@ -6725,7 +6725,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/browser-host-command-ledger-capacity.test.ts",
+          "file": "src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts",
           "assertions": [
             "per-page and global result replay caches expire at exact ceilings",
             "accepted authority, command, and result payloads remain immutable",
@@ -6889,14 +6889,14 @@
           ]
         },
         {
-          "file": "src/main/ssh/system-ssh-dynamic-forward-process.test.ts",
+          "file": "src/main/ssh/system-transport/system-ssh-dynamic-forward-process.test.ts",
           "assertions": [
             "system SSH uses BatchMode=yes, disables ControlMaster, and positions one dynamic forward before the destination",
             "authority invalidation cancels an in-progress SSH launch and destroys its active readiness probe immediately"
           ]
         },
         {
-          "file": "src/main/ssh/ssh-port-forward.test.ts",
+          "file": "src/main/ssh/port-forwarding/ssh-port-forward.test.ts",
           "assertions": [
             "static system-SSH forwards receive the connection's complete resolved build options"
           ]
@@ -6951,7 +6951,7 @@
           "date": "2026-08-15",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
           "result": "passed",
           "durationSeconds": 3.61,
           "summary": "On the #14753 tip, sixteen files passed 167 exact terminal navigation/route fencing, retained reconnect grace, placement retirement, attach, command, result, route recovery, admission, and mixed-version protocol assertions. The new composition oracle was 1 failed / 10 passed before implementation because terminal host loss started asynchronous close without first suspending routes or revoking navigation."
@@ -6960,7 +6960,7 @@
           "date": "2026-08-15",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host-page-retirement.test.ts src/main/runtime/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host-page-placement.test.ts src/main/runtime/browser-host-lease-registry.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host/browser-host-page-retirement.test.ts src/main/runtime/browser-host/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host/browser-host-page-placement.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts",
           "result": "passed",
           "durationSeconds": 0.32,
           "summary": "On origin/main@5b7f44278a, the new oracle was 6 failed / 1 passed before implementation because terminal host fencing left exact placements cancellable; the candidate passed 44/44 terminal release, replacement, legacy disconnect, grace expiry, reconnect preservation, exact-generation isolation, capacity retention, and two-phase settlement assertions."
@@ -6978,7 +6978,7 @@
           "date": "2026-08-15",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
           "result": "passed",
           "durationSeconds": 7.18,
           "summary": "On origin/main@5b7f44278a, fifteen files passed 159 mixed-version attach, exact authority, bounded admission and recovery, reconnect, route suspension, page-command replay, result-ledger, and authenticated lease tests."
@@ -6987,7 +6987,7 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
           "result": "passed",
           "durationSeconds": 2.23,
           "summary": "Fourteen files passed 150 negotiated same-client reconnect, legacy skew, active takeover, exact authority, immediate route suspension, independently bounded route retry, stable fail-closed SOCKS, ready-before-replay, completed-mutation dedupe, partial-replay delivery recovery, repeated-loss, stale-callback, explicit-revocation, grace cleanup, and deterministic jittered-backoff tests."
@@ -6996,7 +6996,7 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-inventory.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-inventory.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/browser-host/browser-host-page-reconciliation-plan.test.ts",
           "result": "passed",
           "durationSeconds": 7.3,
           "summary": "Eleven files passed 145 exact inventory negotiation, 256-page and 768 KiB atomic bounds, worst-case JSON-escaped inventory identities, deterministic optional-URL compaction, legacy-command preservation when inventory is unencodable, legacy strip, immutable authenticated lease snapshot, strict v1/duplicate/foreign-client rejection, paired-device-bound previous-runtime restart admission, missing and unsolicited echo, create-to-active deduplication, renderer/guest-stale outcome-unknown classification, normalized URL bounds, composition sampling, RPC retention, and reconciliation tests."
@@ -7032,7 +7032,7 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts src/main/runtime/browser-host/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
           "result": "passed",
           "durationSeconds": 1.88,
           "summary": "Four files passed 31 server-owned issue order, shared-schema payload validation, immutable authority and payload, exact result connection authentication and replay, stale and retirement fencing, outstanding/page/cache ceilings, transactional lifecycle settlement, delivery failure, and outcome-unknown tests."
@@ -7041,7 +7041,7 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/remote-browser-socks-server.test.ts",
           "result": "passed",
           "durationSeconds": 3.9,
           "summary": "Sixteen files passed 154 bounded page-command negotiation, legacy ready/revoked compatibility, exact authority, unnegotiated and stale-command delivery, lease, tunnel, memory, flow-control, SOCKS, and paired E2EE tests."
@@ -7050,7 +7050,7 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-page-retirement.test.ts src/main/runtime/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host-page-placement.test.ts src/main/runtime/browser-host-lease-registry.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/browser-host-page-retirement.test.ts src/main/runtime/browser-host/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host/browser-host-page-placement.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts",
           "result": "passed",
           "durationSeconds": 0.2,
           "summary": "Four files passed 26 two-phase retirement, exact replacement, pre-selection admission, runtime/epoch/host/page authority, live-lease fencing, monotonic generation, invalid-identity, default 256-placement capacity, and stale-settlement tests."
@@ -7068,7 +7068,7 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/remote-browser-socks-server.test.ts",
           "result": "passed",
           "durationSeconds": 7.7,
           "summary": "Sixteen files passed 131 route, lease, aggregate application/encrypted/native memory, exact release, bounded-drain, stable-listener and protocol-failure reconnect, v1 reattach compatibility, generation/stream-ID fencing, SOCKS, and real paired E2EE tests; the full runtime-RPC suite separately passed 1,349 tests with one skip."
@@ -7077,7 +7077,7 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
           "result": "passed",
           "durationSeconds": 6.9,
           "summary": "Eleven files passed 73 admission, lease, route-generation, bidirectional retained-byte/chunk, pending-open/rate, exact-release, SOCKS, and real paired E2EE tests; the full runtime-RPC suite separately passed 1,347 tests with one skip."
@@ -7086,7 +7086,7 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
           "result": "passed",
           "durationSeconds": 3.4,
           "summary": "Eleven files passed 67 lease, reserved long-poll and host admission, token-safe placement retirement, authority, capability, route-generation, adversarial-revocation, lifecycle, flow-control, SOCKS, and real paired E2EE tests."
@@ -7615,8 +7615,8 @@
       "oracle": "Create through the normal renderer-store action with client hosting enabled. Require client placement, one client-owned guest at the fixture URL, zero server-owned guests, no remote-browser frame, a visible retained marker, and a browser.snapshot marker from the same remote page. Disable the setting and require that guest to survive; create another page and require one server-owned guest, zero matching client guests, and a visible server screencast. Delay renderer publication after tabCreate acknowledgement and require one exact bounded subscription to materialize the page without polling or cleanup. Reject a client create and require no server fallback. Omit placement or capabilities and require no client-host RPC. During replacement, admit close-first only for negotiated reconciliation of imported inventory; ordinary close-first and navigate-first remain rejected. Run the same placement oracle against headed and headless paired hosts, plus deterministic native, SSH, WSL, folder, worktree, reconnect, retirement, and browserless-host contracts.",
       "commands": [
         "pnpm exec playwright test tests/e2e/paired-client-hosted-browser.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-session-browser-client-placement.test.ts src/renderer/src/runtime/web-runtime-session-browser-create-failure.test.ts src/main/runtime/orca-runtime-browser-client-hosted.test.ts src/main/runtime/runtime-browser-client-page-creation.test.ts src/main/runtime/browser-host-page-reconciliation-orchestration.test.ts src/main/runtime/browser-host-command-ledger.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host-capability-selection.test.ts src/main/runtime/rpc/methods/browser-tab-create-schema.test.ts src/main/ipc/runtime-environment-browser-client-host-handler.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-session-browser-client-placement.test.ts src/renderer/src/runtime/web-runtime-session-browser-create-failure.test.ts src/main/runtime/orca-runtime-browser-client-hosted.test.ts src/main/runtime/runtime-browser-client-page-creation.test.ts src/main/runtime/browser-host/browser-host-page-reconciliation-orchestration.test.ts src/main/runtime/browser-host/browser-host-command-ledger.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host/browser-host-capability-selection.test.ts src/main/runtime/rpc/methods/browser-tab-create-schema.test.ts src/main/ipc/runtime-environments/runtime-environment-browser-client-host-handler.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts",
         "SKIP_BUILD=1 ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE=/Applications/Orca.app/Contents/MacOS/Orca pnpm exec playwright test tests/e2e/packaged-mixed-version-browser-placement.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/wsl-browser-network-execution-route.test.ts src/main/browser/wsl-browser-network-relay-launch.test.ts src/main/runtime/runtime-browser-network-execution-host.test.ts",
@@ -7631,13 +7631,13 @@
         "src/renderer/src/runtime/web-runtime-session-browser-create-failure.test.ts",
         "src/main/runtime/orca-runtime-browser-client-hosted.test.ts",
         "src/main/runtime/runtime-browser-client-page-creation.test.ts",
-        "src/main/runtime/browser-host-page-reconciliation-orchestration.test.ts",
-        "src/main/runtime/browser-host-command-ledger.test.ts",
+        "src/main/runtime/browser-host/browser-host-page-reconciliation-orchestration.test.ts",
+        "src/main/runtime/browser-host/browser-host-command-ledger.test.ts",
         "src/shared/browser-client-host-protocol.test.ts",
         "src/shared/remote-runtime-client.test.ts",
-        "src/main/runtime/browser-host-capability-selection.test.ts",
+        "src/main/runtime/browser-host/browser-host-capability-selection.test.ts",
         "src/main/runtime/rpc/methods/browser-tab-create-schema.test.ts",
-        "src/main/ipc/runtime-environment-browser-client-host-handler.test.ts",
+        "src/main/ipc/runtime-environments/runtime-environment-browser-client-host-handler.test.ts",
         "tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts",
         "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
         "src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
@@ -7685,7 +7685,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/browser-host-command-ledger.test.ts",
+          "file": "src/main/runtime/browser-host/browser-host-command-ledger.test.ts",
           "assertions": [
             "reconciliation may close imported inventory before a create command in the replacement ledger",
             "ordinary close-first and navigate-first commands remain rejected"
@@ -10456,7 +10456,7 @@
       "invariant": "Only an explicit user change in Settings > Remote Orca Servers > Advanced > Active Server may mutate activeRuntimeEnvironmentId. Connecting, pairing, disconnecting, selecting or revealing a workspace or terminal, browser/mobile handoff, remote navigation, and reconnect must use transient or target-owner routing and must never rewrite the durable preference. Every Add Project selected host must satisfy canSelectAddRepoHost; paired web has no local filesystem fallback, so no valid host means Browse, Clone, and Create remain disabled. Every operation stays on the host selected when it began, even if preference or catalog state changes. Generic settings mutation cannot bypass the dedicated preference IPC.",
       "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat transient routing and selected-runtime Add Project operations with exact-ID host decoys and completion reordering. Separately pair the real web client to an isolated headed host, then make its sole still-listed runtime compatibility-blocked and unavailable. Require a null authoritative selection, a disabled host option, and disabled Browse, Clone, and Create actions with no local fallback. Repeat against headless serve. Run the byte-identical selector/action contract on latest main, candidate, and candidate with the eligibility seam disabled.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/runtime/runtime-server-directory-browser.test.ts src/renderer/src/store/slices/repos-paired-runtime-add.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
@@ -10467,7 +10467,7 @@
       ],
       "testFiles": [
         "src/main/ipc/settings.test.ts",
-        "src/main/ipc/runtime-environments-pairing.test.ts",
+        "src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts",
         "src/renderer/src/store/slices/settings.test.ts",
         "src/renderer/src/store/slices/browser.test.ts",
         "src/renderer/src/components/settings/browser-session-host-selection.test.ts",
@@ -10673,7 +10673,7 @@
           "date": "2026-07-22",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
           "result": "passed",
           "durationSeconds": 6.55,
           "summary": "Ten files and 282 tests passed, including the composed Local -> Windows 2 navigation -> local reveal -> restart regression, dedicated-only preference persistence, removed transient-host fallback, multi-client browser routing, late host-operation suppression, and web pairing/preference separation."
@@ -11733,7 +11733,7 @@
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test tests/e2e/paired-client-first-terminal-unopened-host-worktree.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/mobile-session-tabs-agent-status-heartbeat.test.ts src/main/runtime/orca-runtime-hook-agent-status-projection.test.ts tests/e2e/session-tabs-decorative-title-fanout.unit.test.ts tests/e2e/session-tabs-rich-status-boundaries.unit.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-cold-park-pre-gate-loop.react185.test.tsx src/renderer/src/components/terminal-pane/use-parked-terminal-watcher-synchronization.react185.test.tsx src/renderer/src/components/terminal-pane/terminal-cold-park-verdict-loop.test.tsx src/renderer/src/components/terminal-pane/use-terminal-tab-cold-parking.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments-pairing.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/session-tabs-inventory-publication.test.ts src/main/runtime/rpc/methods/session-tabs-inventory-census-race.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/renderer/src/runtime/host-session-mirror-empty-inventory-settle.test.ts src/main/daemon/terminal-host-agent-session.test.ts tests/e2e/session-tabs-empty-inventory-daemon-oracle.unit.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-shared-control-connection.test.ts",
@@ -11763,7 +11763,7 @@
         "src/renderer/src/components/terminal-pane/use-terminal-tab-cold-parking.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/renderer/src/web/web-preload-api-runtime-environment.test.ts",
-        "src/main/ipc/runtime-environments-pairing.test.ts",
+        "src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts",
         "src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts",
         "src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts",
         "src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts",
@@ -12128,11 +12128,11 @@
           "date": "2026-08-02",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-park-reveal-model-snapshot.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments-pairing.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-park-reveal-model-snapshot.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts",
           "result": "passed",
           "durationSeconds": 18.71,
           "summary": "Seventeen focused files passed 2,044 tests with one existing skip, including the 64-PTY decorative-title bound, per-client late subscription, semantic-fact preservation, and the true no-output-pause legacy client shape.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments-pairing.test.ts"
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts"
         },
         {
           "date": "2026-08-02",
@@ -12165,11 +12165,11 @@
           "date": "2026-07-29",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-park-reveal-model-snapshot.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments-pairing.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-park-reveal-model-snapshot.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts",
           "result": "passed",
           "durationSeconds": 19.54,
           "summary": "Seventeen focused files passed 1,938 tests with one existing skip, including 128 active streams, retryable rejection at 129, released-slot snapshot recovery, bounded liveness probes, and balanced subscriber cleanup.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments-pairing.test.ts"
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts"
         },
         {
           "date": "2026-07-29",
@@ -13108,7 +13108,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-error-accumulation.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-attach-subscription.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-attach-subscription.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-expired-pane-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-outcome-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-handoff.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts src/shared/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/ipc-events/direct-ssh-connect-reply-routing.test.ts src/renderer/src/store/slices/terminals-hydration.test.ts src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts src/renderer/src/hooks/direct-ssh-state-routing.test.ts src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/ipc/worktrees-lineage-hydration.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/ssh-connection-manager.test.ts src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/ipc/worktrees-lineage-hydration.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/ssh-connection-manager.test.ts src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run build:web-from-renderer",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -13151,7 +13151,7 @@
         "src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts",
         "src/renderer/src/hooks/direct-ssh-state-routing.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts",
-        "src/main/ipc/ssh.test.ts",
+        "src/main/ipc/ssh/ssh.test.ts",
         "src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts",
         "src/main/ipc/worktrees-lineage-hydration.test.ts",
         "src/main/runtime/public-ssh-state.test.ts",
@@ -13310,7 +13310,7 @@
           ]
         },
         {
-          "file": "src/main/ipc/ssh.test.ts",
+          "file": "src/main/ipc/ssh/ssh.test.ts",
           "assertions": [
             "concurrent same-authority connects share one provider attempt",
             "authority rotation starts stale transport cancellation before teardown, concurrent fresh callers share one replacement, and stale completion cannot clobber the fresh session",
@@ -18011,8 +18011,8 @@
         "node config/scripts/runtime-file-watcher-resource-probe.mjs",
         "node config/scripts/runtime-file-watcher-fault-harness.mjs",
         "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs"
       ],
       "testFiles": [
         "src/main/daemon/daemon-pty-adapter.test.ts",
@@ -18058,7 +18058,7 @@
         "src/shared/promise-settlement-waiters.test.ts",
         "config/scripts/runtime-file-watcher-fault-harness.mjs",
         "config/scripts/runtime-file-watcher-resource-probe.mjs",
-        "src/main/ssh/remote-versioned-install.test.ts",
+        "src/main/managed-server/install/remote-versioned-install.test.ts",
         "config/scripts/package-electron-runtime-contract.test.mjs"
       ],
       "assertionRefs": [
@@ -18380,7 +18380,7 @@
           ]
         },
         {
-          "file": "src/main/ssh/remote-versioned-install.test.ts",
+          "file": "src/main/managed-server/install/remote-versioned-install.test.ts",
           "assertions": [
             "remote completeness requires every model artifact and the install sentinel"
           ]
@@ -18457,7 +18457,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
           "result": "passed",
           "durationSeconds": 10.01,
           "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 226 tests."
@@ -18511,7 +18511,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
           "result": "passed",
           "durationSeconds": 10.69,
           "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 226 tests, including watcher/PTY removal fencing and recursive deletion failure behavior."
@@ -18565,7 +18565,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
           "result": "passed",
           "durationSeconds": 9.79,
           "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 225 tests, including terminal removal notification and recursive deletion fencing."
@@ -18736,14 +18736,14 @@
       "invariant": "For one connected SSH authority, a renderer snapshot may update Forwarded or Detected state only if no newer push for that target and stream arrived after the snapshot began. Active tunnels and persisted intent remain authoritative through scan refresh and reconnect until explicit removal or a real connection-lifecycle transition.",
       "oracle": "Hold empty initial Forwarded and Detected snapshot promises, publish live events, release the snapshots, and require each target and stream to preserve only its own newer push while applying unaffected snapshots. Reject one target's Detected snapshot and require its Forwarded snapshot plus later targets to hydrate independently. Begin another target with partial connected authority and require its snapshots to hydrate after same-watermark authority reconciliation. In headed Electron, hold an authoritative empty Forwarded snapshot across renderer reload, add a forward through the Ports panel, release and confirm the wrapped main handler resumed, then complete a later renderer-to-main listPortForwards round trip as the ordered hydration-continuation barrier. Before checking the Forwarded row, require main inventory, persisted intent, HTTP, remote process identity, and close warnings to prove the tunnel remained authoritative. Then forward two real Docker listeners, refresh detection, force an in-place relay-channel reconnect, perform a full transport reconnect, reject a bound local-port collision, remove one row, and require all signals to agree.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts src/main/ssh/ssh-port-forward.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ipc/ssh.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts src/main/ssh/port-forwarding/ssh-port-forward.test.ts src/main/ssh/system-transport/system-ssh-forward-process.test.ts src/main/ipc/ssh/ssh.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e"
       ],
       "testFiles": [
         "src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts",
-        "src/main/ssh/ssh-port-forward.test.ts",
-        "src/main/ssh/system-ssh-forward-process.test.ts",
-        "src/main/ipc/ssh.test.ts"
+        "src/main/ssh/port-forwarding/ssh-port-forward.test.ts",
+        "src/main/ssh/system-transport/system-ssh-forward-process.test.ts",
+        "src/main/ipc/ssh/ssh.test.ts"
       ],
       "assertionRefs": [
         {
@@ -18751,11 +18751,11 @@
           "assertions": ["does not let initial SSH port snapshots overwrite newer push events"]
         },
         {
-          "file": "src/main/ssh/ssh-port-forward.test.ts",
+          "file": "src/main/ssh/port-forwarding/ssh-port-forward.test.ts",
           "assertions": ["lists forwards filtered by connectionId", "removes a forward by id"]
         },
         {
-          "file": "src/main/ssh/system-ssh-forward-process.test.ts",
+          "file": "src/main/ssh/system-transport/system-ssh-forward-process.test.ts",
           "assertions": [
             "does not spawn ssh when the requested local forward port is already in use",
             "sends SIGTERM then SIGKILL when the process does not exit",
@@ -18763,7 +18763,7 @@
           ]
         },
         {
-          "file": "src/main/ipc/ssh.test.ts",
+          "file": "src/main/ipc/ssh/ssh.test.ts",
           "assertions": [
             "preserves active port forwards and live connections across handler re-registration",
             "persists desired forwards and broadcasts when an active forward closes unexpectedly"
@@ -18775,7 +18775,7 @@
           "date": "2026-07-30",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts src/main/ssh/ssh-port-forward.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ipc/ssh.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts src/main/ssh/port-forwarding/ssh-port-forward.test.ts src/main/ssh/system-transport/system-ssh-forward-process.test.ts src/main/ipc/ssh/ssh.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 6.77,
           "summary": "Six renderer, main-process, and barrier lifecycle files passed with 215 tests, including deterministic stale-snapshot, rejected-stream, partial-authority, and single-capture isolation plus existing collision, delayed-exit, reconnect, persistence, re-registration, and unrelated-forward contracts."

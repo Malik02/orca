@@ -12,6 +12,7 @@ import {
   type SortSettleEvent
 } from '../../../shared/sidebar-list/sort-settle'
 import { ranksFollowPersistedOrder } from '../../../shared/sidebar-list/smart-sort-phase'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import {
   rankWorktreesForSort,
   type SmartSortSources
@@ -151,6 +152,11 @@ export class SidebarTemporalOwner {
       this.settleNow()
       return
     }
+    // Switch point: the order is a pure read of the rows' stamps, so any re-list re-sorts, as the window does.
+    if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+      this.settleNow()
+      return
+    }
     const change = classifyCatalogListingChange(previous, this.listing)
     // Every row change bumps here, so the count can only move on a bump; no other write settles.
     const settled = change === 'rows' && this.noteSortInputChange(liveCount)
@@ -159,6 +165,11 @@ export class SidebarTemporalOwner {
     if (!settled && (repoChanged || followsSave)) {
       this.settleNow()
     }
+  }
+
+  /** Switch on: a saved metadata write no catalog event announced. */
+  noteRowsWritten(): void {
+    this.settleNow()
   }
 
   /** Activity alone never re-sorts; its sort-relevant causes arrive as their own changes. */
@@ -276,9 +287,11 @@ export class SidebarTemporalOwner {
   // Recent ranks a new row at its grace floor until the window closes; re-sort when it does.
   private scheduleCreateGraceBoundary(worktrees: readonly Worktree[], now: number): void {
     let next = Infinity
+    // Stamps carry no create grace.
     const readsRecency =
-      this.sortBy === 'recent' ||
-      (this.sortBy === 'smart' && !ranksFollowPersistedOrder(this.sortBy, this.smartLatched))
+      !ORCA_SIDEBAR_INPUTS_IS_MAIN &&
+      (this.sortBy === 'recent' ||
+        (this.sortBy === 'smart' && !ranksFollowPersistedOrder(this.sortBy, this.smartLatched)))
     if (readsRecency) {
       for (const { createdAt } of worktrees) {
         const closesAt = (createdAt ?? -Infinity) + CREATE_GRACE_MS

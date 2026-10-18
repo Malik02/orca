@@ -19,7 +19,12 @@ const FOLDER_WORKSPACE_INSTANCE_SUFFIX = new RegExp(
  * runtimes reject it with `worktree_id_requires_full_path` (#16447).
  */
 export function getRepoMainWorktreeId(repo: Pick<Repo, 'id' | 'path'>): string {
-  return `${repo.id}${WORKTREE_ID_SEPARATOR}${repo.path}`
+  return composeWorktreeId(repo.id, repo.path)
+}
+
+/** Worktree id for a checkout, spelled exactly as given: ids are never reassigned by a fold. */
+export function composeWorktreeId(repoId: string, worktreePath: string): string {
+  return `${repoId}${WORKTREE_ID_SEPARATOR}${worktreePath}`
 }
 
 export function getRepoIdFromWorktreeId(worktreeId: string): string {

@@ -203,11 +203,14 @@ describe.skipIf(skip)('orca serve on orcad', () => {
     const appRoot = profile()
     mkdirSync(join(appRoot, 'out', 'web'), { recursive: true })
     writeFileSync(join(appRoot, 'out', 'web', WEB_CLIENT_INDEX_FILENAME), '<title>orca web</title>')
-    // The argv `orca serve` builds, but on loopback: a test must not listen on every interface.
-    const args = orcadServeArgs({ json: true, port: '0' }, findBundledWebClientRoot(appRoot))
-    args.splice(args.indexOf('0.0.0.0'), 1, '127.0.0.1')
+    // The argv `orca serve` builds, but on loopback.
+    const args = orcadServeArgs(
+      { json: true, port: '0' },
+      findBundledWebClientRoot(appRoot),
+      '127.0.0.1'
+    )
     try {
-      const readiness = await serveOnce(userData, args)
+      const { readiness } = await serveOnce(userData, args)
       const webClientUrl: unknown = readiness.pairing?.webClientUrl
       expect(webClientUrl).toEqual(expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\//u))
       const index = await fetch(new URL(`/${WEB_CLIENT_INDEX_FILENAME}`, String(webClientUrl)))
@@ -262,14 +265,30 @@ const running = new Map<string, ReturnType<typeof spawnProcess>>()
 
 /** Starts `orca serve --json` on orcad and returns the terminal daemon pid its readiness names. */
 async function serveDaemonPid(userData: string): Promise<number> {
-  const readiness = await serveOnce(userData, ['--bind', '127.0.0.1', '--port', '0', '--json'])
+  const { readiness, stderr } = await serveOnce(userData, [
+    '--bind',
+    '127.0.0.1',
+    '--port',
+    '0',
+    '--json'
+  ])
   const daemon = readiness.health?.terminalDaemon
-  expect(daemon?.state).toBe('live')
+  if (daemon?.state !== 'live') {
+    throw new Error(`terminal daemon not live (${String(daemon?.state)}): ${stderr}`)
+  }
   return daemon.pid
 }
 
-/** Starts orcad with `args` and returns its parsed readiness line. */
-async function serveOnce(userData: string, args: string[]) {
+type ServeReadiness = {
+  pairing?: { webClientUrl?: unknown }
+  health?: { terminalDaemon?: { state?: string; pid: number } }
+}
+
+/** Starts orcad with `args` and returns its parsed readiness line and stderr so far. */
+async function serveOnce(
+  userData: string,
+  args: string[]
+): Promise<{ readiness: ServeReadiness; stderr: string }> {
   const child = spawnProcess({
     program: runtime!,
     args: [join(slotDir, 'orcad.js'), ...args],
@@ -291,7 +310,8 @@ async function serveOnce(userData: string, args: string[]) {
       }
     })
   })
-  return JSON.parse(line)
+  const readiness: ServeReadiness = JSON.parse(line)
+  return { readiness, stderr }
 }
 
 /** SIGTERM is serve's graceful stop on POSIX; it leaves the daemon running by design. */

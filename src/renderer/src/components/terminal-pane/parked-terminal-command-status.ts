@@ -160,7 +160,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       return
     }
     // Why: a parked pane holds no remote incarnation to fence host evidence with, so it has no answer.
-    const remote = isRemoteExecutionHostPtyId(ptyId) || parseAppSshPtyId(ptyId) !== null
+    const remote = isRemoteExecutionHostPtyId(ptyId)
     let processName: string | null = null
     if (!remote) {
       try {

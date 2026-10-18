@@ -21,9 +21,10 @@ import {
 } from './local-worktree-scan-generation'
 import { dropWorkspacesTheListingInvalidates } from './persistence/restoring-sessions/invalid-workspace-layout-purge'
 import { WorkspaceLayoutStream } from './runtime/workspace-layout-stream'
+import { windowViewSaveForMain } from './persistence/window-save-view'
 
 vi.mock('../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
@@ -222,8 +223,7 @@ describe('main drops the layout of workspaces the catalog no longer validates', 
     })
   })
 
-  // Pending until Core-A: today a window save still carries structure, so it can restore the key.
-  it.skip('a later window save that still names a dropped workspace does not bring it back', () => {
+  it('a later window save that still names a dropped workspace does not bring it back', () => {
     const store = (() => {
       writeDataFile({
         schemaVersion: 1,
@@ -235,7 +235,14 @@ describe('main drops the layout of workspaces the catalog no longer validates', 
     })()
     dropWorkspacesTheListingInvalidates(store, listing([KEPT]))
 
-    store.setWorkspaceSession(sessionWith(KEPT, DELETED), 'local')
+    store.setWorkspaceSession(
+      windowViewSaveForMain(
+        store.getWorkspaceSession('local'),
+        sessionWith(KEPT, DELETED),
+        'local'
+      ),
+      'local'
+    )
 
     expect(storedKeys(store)).toEqual([KEPT])
   })

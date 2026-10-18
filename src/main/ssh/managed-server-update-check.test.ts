@@ -4,8 +4,8 @@ import {
   checkManagedServerUpdate,
   type ManagedServerUpdateDeps
 } from './managed-server-update-check'
-import type { ManagedOrcadAutoUpdateOutcome } from './orcad-managed-auto-update'
-import { ORCAD_ACTIVATION_FENCE_BUSY_CODE } from './orcad-activation-fence-hold'
+import type { ManagedOrcadAutoUpdateOutcome } from '../managed-server/lifecycle/orcad-managed-auto-update'
+import { ORCAD_ACTIVATION_FENCE_BUSY_CODE } from '../managed-server/activation/orcad-activation-fence-hold'
 
 // The retry decision is read under the host's lifecycle lock, so the stub's last call answers it.
 const failedBeforeOf = (autoUpdate: ManagedServerUpdateDeps['autoUpdate']) =>
@@ -25,7 +25,7 @@ function deps(
       return outcome
     }),
     recordedUpdateFailure: () => null,
-    retryRecordedFailure: () => false,
+    failedThisLaunch: () => true,
     recordUpdateFailure: vi.fn(),
     clearUpdateFailure: vi.fn(),
     ...overrides
@@ -68,7 +68,7 @@ describe('a recorded update failure', () => {
   it('is retried when the launch allows it, and skipped otherwise', async () => {
     const retried = deps(
       { outcome: 'updated', activeVersion: '1' },
-      { recordedUpdateFailure: () => 'old', retryRecordedFailure: () => true }
+      { recordedUpdateFailure: () => 'old', failedThisLaunch: () => false }
     )
     await check(retried)
     expect(failedBeforeOf(retried.autoUpdate)).toBe(false)
@@ -82,16 +82,23 @@ describe('a recorded update failure', () => {
     expect(failedBeforeOf(held.autoUpdate)).toBe(true)
   })
 
-  it('lets only one of two overlapping checks spend the launch retry', async () => {
+  it.each([
+    ['a failure recorded by an earlier launch', 'old'],
+    ['no recorded failure', null]
+  ])('with %s, lets only one of two overlapping checks try the update', async (_name, recorded) => {
     const failedThisLaunch = new Set<string>()
+    let failure: string | null = recorded
     let lock: Promise<unknown> = Promise.resolve()
     let attempts = 0
     const d = deps(
       { outcome: 'failed', reason: 'bad' },
       {
-        recordedUpdateFailure: () => 'old',
-        retryRecordedFailure: (t) => !failedThisLaunch.has(t.id),
-        recordUpdateFailure: (t) => void failedThisLaunch.add(t.id),
+        recordedUpdateFailure: () => failure,
+        failedThisLaunch: (t) => failedThisLaunch.has(t.id),
+        recordUpdateFailure: (t, reason) => {
+          failure = reason
+          failedThisLaunch.add(t.id)
+        },
         // Like the host lifecycle lock: one update at a time, each reading the decision inside.
         autoUpdate: (_id, options) => {
           const run = lock.then(async (): Promise<ManagedOrcadAutoUpdateOutcome> => {
@@ -106,13 +113,9 @@ describe('a recorded update failure', () => {
         }
       }
     )
-    await Promise.all([check(d), check(d)])
+    const results = await Promise.all([check(d), check(d)])
     expect(attempts).toBe(1)
-  })
-
-  it('does not consume the launch retry when nothing failed', async () => {
-    const retry = vi.fn(() => true)
-    await check(deps({ outcome: 'skipped', reason: 'current' }, { retryRecordedFailure: retry }))
-    expect(retry).not.toHaveBeenCalled()
+    // The waiting check names the failure the first one just recorded.
+    expect(results[1].note).toEqual({ state: 'failed', detail: 'bad' })
   })
 })

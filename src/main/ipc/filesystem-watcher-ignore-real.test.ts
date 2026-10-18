@@ -73,9 +73,9 @@ describe('filesystem watcher native ignores', () => {
       sourceFiles.push(join(root, 'source\nnewline.ts'), join(nestedSource, 'source\nnewline.ts'))
     }
     await writeUntilSeen(sourceFiles)
-    // Why: events arrive in order, so once a file written after the storm is seen, any
+    // Why: events arrive in order, so once a file written after the storm is seen at both levels, any
     // unignored generated event is already recorded. Replaces a fixed debounce sleep.
-    await writeUntilSeen([join(nestedSource, 'sentinel.ts')])
+    await writeUntilSeen([join(root, 'sentinel.ts'), join(nestedSource, 'sentinel.ts')])
 
     expect(errors).toEqual([])
     const generatedPaths = new Set(generatedFiles)

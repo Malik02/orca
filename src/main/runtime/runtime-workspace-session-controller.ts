@@ -14,6 +14,7 @@ import { workspaceSessionPartitionHostId } from '../../shared/workspace-session-
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { workspaceSessionListsTerminalTab } from '../../shared/workspace-session-terminal-tab-close'
 import type { RuntimeStore } from './runtime-store-contract'
+import { resolveTwinRepoSessionHostId, type CachedWorktreeHost } from './twin-repo-session-host'
 
 /**
  * Where a layout-owner build routes a folder: the rule the window stamps and saves its rows by, so
@@ -32,6 +33,7 @@ type RuntimeWorkspaceSessionDependencies = {
     worktreeId: string,
     tabs: WorkspaceSessionState['tabsByWorktree'][string]
   ) => boolean
+  getCachedWorktrees?: () => readonly CachedWorktreeHost[] | null
 }
 
 export class RuntimeWorkspaceSessionController {
@@ -62,10 +64,31 @@ export class RuntimeWorkspaceSessionController {
       return getConnectionExecutionHostId(this.deps.resolveFolderConnectionId(workspace))
     }
     const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
-    const repo = store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
+    const repoId = getRepoIdFromWorktreeId(resolvedWorktreeId)
+    const twinHostId = this.getTwinRepoHostId(store, repoId, resolvedWorktreeId)
+    if (twinHostId) {
+      return twinHostId
+    }
+    const repo = store?.getRepo?.(repoId)
     return repo
       ? workspaceSessionPartitionHostId(getRepoExecutionHostId(repo))
       : LOCAL_EXECUTION_HOST_ID
+  }
+
+  // Why: a twin repo's first row is arbitrary; the window saves to the host chosen here.
+  private getTwinRepoHostId(
+    store: RuntimeStore,
+    repoId: string,
+    worktreeId: string
+  ): ExecutionHostId | null {
+    return ORCA_LAYOUT_OWNER_IS_MAIN
+      ? resolveTwinRepoSessionHostId(
+          store,
+          repoId,
+          worktreeId,
+          this.deps.getCachedWorktrees?.() ?? null
+        )
+      : null
   }
 
   private resolveHostId(
@@ -220,12 +243,14 @@ export class RuntimeWorkspaceSessionController {
     for (const [hostId, session] of sessionsByHostId) {
       for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
         const scope = parseWorkspaceKey(worktreeId)
+        const rawWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+        const repoId = getRepoIdFromWorktreeId(rawWorktreeId)
         const catalogOwnerHostId =
           scope?.type === 'folder'
             ? (folderHostIdByWorkspaceId.get(scope.folderWorkspaceId) ?? null)
-            : (repoHostIdByRepoId.get(
-                getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : worktreeId)
-              ) ?? LOCAL_EXECUTION_HOST_ID)
+            : (this.getTwinRepoHostId(store, repoId, rawWorktreeId) ??
+              repoHostIdByRepoId.get(repoId) ??
+              LOCAL_EXECUTION_HOST_ID)
         const ownerHostId = this.resolveHostId(
           worktreeId,
           catalogOwnerHostId ?? LOCAL_EXECUTION_HOST_ID,

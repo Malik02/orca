@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcadMigrationBlobDescriptor } from '../../shared/orcad-migration-blob-transfer'
+import type { OrcadMigrationManifest } from '../../shared/orcad-migration-manifest'
 import {
   MAX_ORCAD_MIGRATION_MANIFEST_BYTES,
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+  ORCAD_MIGRATION_MANIFEST_VERSION
+} from '../../shared/orcad-migration-manifest-validation'
 import {
   ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY

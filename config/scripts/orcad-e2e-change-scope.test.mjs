@@ -64,7 +64,7 @@ const cases = {
       'src/main/wsl/wsl-orcad-deploy.test.ts',
       'src/main/wsl/nested/wsl-orcad-deploy.test.ts',
       'src/main/ssh/orcad-activation-outcome-log.test.ts',
-      'src/main/ssh/orcad-remote-shell-commands.integration.test.ts'
+      'src/main/managed-server/install/orcad-remote-shell-commands.integration.test.ts'
     ],
     retained: [
       'src/main/wsl/wsl-orcad-real-distro-lane.test.ts',
@@ -72,10 +72,10 @@ const cases = {
       'src/main/wsl/wsl-orcad-bridge-test-child.ts',
       'src/main/wsl/wsl-orcad.test-fixture.ts',
       'src/main/wsl/wsl-orcad.test.json',
-      'src/main/ssh/orcad-remote-launch.ts',
+      'src/main/managed-server/install/orcad-remote-launch.ts',
       'src/main/ssh/orcad-launch-test-harness.ts',
       'src/main/ssh/orcad-launch.test-fixture.ts',
-      'src/main/ssh/remote-install-transport.ts',
+      'src/main/managed-server/install/remote-install-transport.ts',
       '.github/workflows/wsl-orcad-e2e.yml'
     ],
     product: 'src/main/wsl/wsl-orcad-deploy.ts'

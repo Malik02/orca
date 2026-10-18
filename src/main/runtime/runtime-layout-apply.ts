@@ -124,8 +124,8 @@ export async function applyWindowLayoutCommand(
 }
 
 /**
- * Applied in the one partition holding both workspaces. Workspaces in two partitions are refused:
- * the window's save carries that move, as today.
+ * Applied in the one partition holding both workspaces, or across the two that do (a local and an
+ * SSH workspace) in one durable write: a window save no longer carries the move.
  */
 async function moveTabToWorkspace(
   store: RuntimeStore,
@@ -143,7 +143,10 @@ async function moveTabToWorkspace(
     return { ok: false, code: 'host_not_owned' }
   }
   if (from !== to) {
-    return { ok: false, code: 'other_partition' }
+    if (!store.moveTabToWorkspaceAcrossPartitions) {
+      throw new Error('layout_store_unavailable')
+    }
+    return store.moveTabToWorkspaceAcrossPartitions(command, from, to)
   }
   if (!store.applyLayoutCommand) {
     throw new Error('layout_store_unavailable')

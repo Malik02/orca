@@ -567,7 +567,8 @@
         "loopbackPairingBlocked": "This access link points back to this device.",
         "remotePairingUnreachable": "Cannot reach Orca at {{endpoint}}.",
         "remotePairingInvalidDetails": "This access link contains invalid connection details.",
-        "remotePairingSaveFailed": "Orca verified the host but could not save it. Check browser storage and try again."
+        "remotePairingSaveFailed": "Orca verified the host but could not save it. Check browser storage and try again.",
+        "remotePairingRepairUnavailable": "Re-pairing is not available in the browser. Pair this browser with the server again."
       },
       "web": {
         "preload": {
@@ -4434,7 +4435,14 @@
             "runtime_unavailable_explanation": "The remote host may still be running; only the Orca runtime connection is unavailable.",
             "contact_note": "The host may still be running; only the Orca connection is unavailable.",
             "last_connected": "Last connected {{value0}}",
-            "reconnect_attempt": "Attempt {{value0}}"
+            "reconnect_attempt": "Attempt {{value0}}",
+            "access_revoked": "Access revoked",
+            "access_revoked_summary": "This server revoked access for this computer",
+            "access_revoked_explanation": "Re-pair with a new pairing link from the server to reconnect.",
+            "update_required": "Update required",
+            "update_required_summary": "Orca versions are not compatible",
+            "update_required_explanation": "Update Orca on this computer or on the server, then connect again.",
+            "repair": "Re-pair…"
           },
           "NativeChatResumeStatusSegment": {
             "labelOne": "1 chat to resume",
@@ -6150,7 +6158,8 @@
           "groupRenameFailedDesc": "Orca could not confirm the new name with the group's host. Recheck the group after reconnecting.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "hostRepairRequired": "Re-pair required"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -6477,7 +6486,8 @@
           "59b553e2aa": "Disconnect",
           "2d3e4f5a6b": "Check connection",
           "3c4d5e6f7a": "Manage host…",
-          "6e7f8a9b0c": "Remove host…"
+          "6e7f8a9b0c": "Remove host…",
+          "repair": "Re-pair…"
         },
         "LinearAgentSkillSetupPrompt": {
           "modalTitle": "Enable Linear ticket access",
@@ -8686,7 +8696,11 @@
           "troubleshootStepRegenerate": "Generate a new access link and use only the newest link here.",
           "troubleshootTunnel": "Using an SSH local forward? Return to Connect to a host, paste the loopback link, then enable “I am using an SSH tunnel” under Advanced.",
           "cloudVmWorkflow": "Cloud VM",
-          "cloudVmWorkflowHelp": "Manage recipe-created cloud machines"
+          "cloudVmWorkflowHelp": "Manage recipe-created cloud machines",
+          "accessRevoked": "{{value0}} no longer accepts this computer. Re-pair it with a new access link.",
+          "repair": "Re-pair…",
+          "serverAccessRevoked": "Access revoked",
+          "orcaVersionLastSeen": "Orca v{{value0}} (last seen)"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copy {{value0}}"
@@ -12331,7 +12345,9 @@
           "networkConnection": "Network connection",
           "notAttempted": "Not attempted",
           "saveFailed": "Could not save the host",
-          "saveFailedHelp": "The host was verified, but Orca could not save it. Check the name and local settings storage, then try again."
+          "saveFailedHelp": "The host was verified, but Orca could not save it. Check the name and local settings storage, then try again.",
+          "differentServer": "This link is for a different server",
+          "differentServerHelp": "This pairing link is for a different server. Create the link on the server you are re-pairing."
         },
         "CloudVmSetupGuide": {
           "title": "Create a Cloud VM",
@@ -12919,6 +12935,13 @@
           "confirm": "Restart",
           "terminalsUnknown": "Orca couldn’t confirm whether terminals are running on this host, so it didn’t restart the managed server.",
           "terminalsRunning": "{{count}} terminals are still running on this host. Close them, then restart the managed server."
+        },
+        "RuntimeRepairDialog": {
+          "title": "Re-pair {{name}}",
+          "description": "{{name}} no longer accepts this computer. On {{name}}, open Settings → Remote Orca Servers → Share this host, create a link for another Orca client, then paste it here.",
+          "submit": "Re-pair",
+          "success": "Re-paired with {{name}}",
+          "failed": "Re-pair failed"
         }
       },
       "right": {
@@ -19433,7 +19456,6 @@
       "keywordIssuePicker": "issue picker"
     },
     "managed-runtime": {
-      "cancel": "Cancel installation",
       "cancelled": "Installation cancelled.",
       "cancelling": "Cancelling…",
       "damaged": "This copy of {{agent}} is damaged.",
@@ -19450,10 +19472,17 @@
       "notInstalled": "Not installed.",
       "progress": "{{agent}} download",
       "readFailed": "Could not check {{agent}} on this host. Retrying.",
-      "reinstall": "Reinstall {{agent}}",
+      "reinstall": "Reinstall",
+      "remove": "Remove downloaded runtime",
+      "removeConfirm": "Remove",
+      "removeDescription": "{{agent}} chats that are running stop. Their history is kept.",
+      "removeKeep": "Cancel",
+      "removeTitle": "Remove the downloaded {{agent}} runtime from {{host}}?",
+      "removing": "Removing…",
       "retry": "Retry installation",
+      "thisComputer": "this computer",
       "unavailable": "{{agent}} is not available on this host.",
-      "update": "Update {{agent}}",
+      "update": "Update",
       "verifying": "Checking the downloaded runtime.",
       "installTitle": "Install {{agent}} to start chatting",
       "continueTitle": "Install {{agent}} to continue",

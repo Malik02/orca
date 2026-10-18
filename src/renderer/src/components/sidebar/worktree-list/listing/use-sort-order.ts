@@ -15,6 +15,7 @@ import {
 } from '../../../../../../shared/sidebar-list/smart-sort-phase'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 
 function trackSmartClassDistribution(attention: ReadonlyMap<string, WorktreeAttention>): void {
   let class1 = 0
@@ -56,6 +57,8 @@ export function useSidebarWorktreeSortOrder(args: {
   // Why settled (not live): the store coalesces bump bursts so rows don't jump (store/settled-sort-epoch.ts).
   const settledSortEpoch = useAppStore((s) => s.settledSortEpoch)
   const sortOrderEpoch = useAppStore((s) => s.sortOrderEpoch)
+  // Switch point: the host's stamps arrive on the rows, so a re-list is what re-sorts.
+  const stampedRows = useAppStore((s) => (ORCA_SIDEBAR_INPUTS_IS_MAIN ? s.worktreesByRepo : null))
 
   // Why a latching ref: a live signal makes Smart authoritative for the session, even after that activity ends.
   const sessionHasHadLiveSmartSignal = useRef(false)
@@ -81,9 +84,9 @@ export function useSidebarWorktreeSortOrder(args: {
       attentionByWorktree: ranking.attentionByWorktree,
       detectedLiveSmartSignal: ranking.detectedLiveSmartSignal
     }
-    // settledSortEpoch is an intentional trigger not read in the memo; its change signals a recompute.
+    // settledSortEpoch and stampedRows are triggers not read in the memo; a change signals a recompute.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [settledSortEpoch, persistedRankTrigger, repoMap, sortBy])
+  }, [settledSortEpoch, persistedRankTrigger, stampedRows, repoMap, sortBy])
   // Why: stable ID order prevents rank-only refreshes from echoing an unchanged snapshot.
   const sortedIds = useReusedArrayIdentity(recomputedSort.sortedIds)
 

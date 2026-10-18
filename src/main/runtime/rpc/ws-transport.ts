@@ -190,18 +190,13 @@ export class WebSocketTransport implements RpcTransport {
     await this.tryListen(0)
   }
 
-  private createHttpServer(): HttpServer {
-    // Why the 404: with no 'request' listener Node never answers plain HTTP, so it hung (#30100).
-    const requestListener = this.staticRoot
-      ? createStaticWebClientHandler(this.staticRoot)
-      : answerWithoutWebClient
-    return createHttpServer(requestListener)
-  }
-
   // Why: attach the WSS only after listen succeeds; earlier it re-emits httpServer's EADDRINUSE as an uncatchable exception and breaks the fallback.
   private async tryListen(port: number): Promise<void> {
     await assertPortNotShadowingListener(this.host, port)
-    const httpServer = this.createHttpServer()
+    // Why the 404: with no 'request' listener Node never answers plain HTTP, so it hung (#30100).
+    const httpServer = createHttpServer(
+      this.staticRoot ? createStaticWebClientHandler(this.staticRoot) : answerWithoutWebClient
+    )
 
     await new Promise<void>((resolve, reject) => {
       httpServer.once('error', reject)

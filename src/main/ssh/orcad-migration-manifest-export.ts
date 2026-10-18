@@ -9,10 +9,12 @@ import { randomUUID } from 'node:crypto'
 import {
   MAX_ORCAD_MIGRATION_MANIFEST_BYTES,
   ORCAD_MIGRATION_MANIFEST_VERSION,
-  parseOrcadMigrationManifest,
-  type OrcadMigrationCatalogPayload,
-  type OrcadMigrationDormantStatePayload,
-  type OrcadMigrationManifest
+  parseOrcadMigrationManifest
+} from '../../shared/orcad-migration-manifest-validation'
+import type {
+  OrcadMigrationCatalogPayload,
+  OrcadMigrationDormantStatePayload,
+  OrcadMigrationManifest
 } from '../../shared/orcad-migration-manifest'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { Store } from '../persistence'

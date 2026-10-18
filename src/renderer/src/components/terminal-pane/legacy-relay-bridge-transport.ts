@@ -1,7 +1,7 @@
 /**
  * A runtime pane whose terminal still runs inside an older Orca's relay: it reattaches through
  * main's legacy relay bridge, and hands every other connect to the managed server's transport.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay-bridge/.
+ * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
  *
  * When the bridge answers that the terminal is gone, the pane gets the host's "session expired"
  * error, which retires its binding and starts a fresh shell on the managed server. When the relay

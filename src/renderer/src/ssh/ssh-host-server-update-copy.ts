@@ -20,7 +20,7 @@ export function managedUpdateLine(update: SshManagedServerUpdateNote): SshHostSe
           'auto.components.settings.sshHostServer.updateDeferredLater',
           'Runs a managed Orca server; it updates on a later connect.'
         ),
-        ...(update.detail ? { detail: update.detail } : {})
+        ...withDetail(update.detail)
       }
     case 'failed':
       return {
@@ -29,7 +29,7 @@ export function managedUpdateLine(update: SshManagedServerUpdateNote): SshHostSe
           'auto.components.settings.sshHostServer.updateFailedPrevious',
           'Runs a managed Orca server on its previous version; updating it failed.'
         ),
-        ...(update.detail ? { detail: update.detail } : {})
+        ...withDetail(update.detail)
       }
     case 'rolled-back':
       return {
@@ -62,7 +62,11 @@ export function managedUpdateLine(update: SshManagedServerUpdateNote): SshHostSe
           'auto.components.settings.sshHostServer.behindCheckFailed',
           'Runs a managed Orca server; Orca couldn’t check whether it is behind this app.'
         ),
-        ...(update.detail ? { detail: update.detail } : {})
+        ...withDetail(update.detail)
       }
   }
+}
+
+export function withDetail(detail: string | undefined): Pick<SshHostServerStatusLine, 'detail'> {
+  return detail ? { detail } : {}
 }

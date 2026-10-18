@@ -25,9 +25,6 @@ export function runtimePathsEqual(left: string, right: string): boolean {
   return normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right)
 }
 
-/** Runtime-side name for the shared workspace-identity comparison; see `worktreeIdsEqual`. */
-export const runtimeWorktreeIdsEqual = worktreeIdsEqual
-
 export function createIncrementalResolvedWorktreeLookup(
   resolvedWorktrees: ResolvedWorktree[]
 ): (worktreeId: string) => ResolvedWorktree | undefined {
@@ -67,7 +64,7 @@ export function resolveTerminalSessionWorktreeId(
     ...Object.keys(session.activeGroupIdByWorktree ?? {})
   ])
   const matches = [...keyedWorktreeIds].filter((worktreeId) =>
-    runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId)
+    worktreeIdsEqual(worktreeId, targetWorktreeId)
   )
   return matches.length > 1 ? null : (matches[0] ?? targetWorktreeId)
 }

@@ -9,7 +9,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { launchSessionEndedLine } from './ssh-host-launch-session-copy'
 import { bridgedTerminalsLine } from './ssh-host-bridged-terminals-copy'
-import { managedUpdateLine } from './ssh-host-server-update-copy'
+import { managedUpdateLine, withDetail } from './ssh-host-server-update-copy'
 
 export type SshHostServerStatusLine = {
   text: string
@@ -288,8 +288,4 @@ function unservedLine(
     case 'failed':
       return { ...(status.held ? heldMoveLine() : retryLine()), ...withDetail(status.detail) }
   }
-}
-
-function withDetail(detail: string | undefined): Pick<SshHostServerStatusLine, 'detail'> {
-  return detail ? { detail } : {}
 }

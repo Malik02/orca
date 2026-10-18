@@ -49,12 +49,13 @@ import {
   scrubAntigravityAcpEnvironment
 } from '../antigravity/antigravity-acp-environment'
 import {
+  ANTIGRAVITY_LAUNCH_GATE,
   answerAntigravityChatAuth,
   antigravityChatAccount
 } from '../antigravity/antigravity-chat-account'
 import { readAntigravitySignInLine } from '../antigravity/antigravity-sign-in-url'
 import type { AcpSignInWatch } from './acp-agent-connection'
-import { AcpLaunchGate } from './acp-launch-gate'
+import type { AcpLaunchGate } from './acp-launch-gate'
 
 /** How an agent lists its models without a session: from its `initialize` answer (plus extension
  *  requests), from a listing command, or not at all. Never `authenticate` or `session/new`. */
@@ -288,7 +289,7 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
   privateTempDirectory: true,
   // `session/load` replays the whole conversation, which the chat already holds.
   resumePreference: 'resume',
-  launchGate: new AcpLaunchGate('Antigravity')
+  launchGate: ANTIGRAVITY_LAUNCH_GATE
 } satisfies AcpLaunchSpec
 
 export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [

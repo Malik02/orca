@@ -73,6 +73,7 @@ export type RuntimeStore = {
   admitTerminalPane?: Store['admitTerminalPane']
   withdrawTerminalPane?: Store['withdrawTerminalPane']
   applyLayoutCommand?: Store['applyLayoutCommand']
+  moveTabToWorkspaceAcrossPartitions?: Store['moveTabToWorkspaceAcrossPartitions']
   getSshRemotePtyLeases?: Store['getSshRemotePtyLeases']
   getUI?: Store['getUI']
   onUIChanged?: Store['onUIChanged']

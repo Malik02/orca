@@ -1,6 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
-import { readHookEndpoint } from './helpers/agent-hook-endpoint'
+import { postClaudeHook, readHookEndpoint } from './helpers/agent-hook-endpoint'
 import { SIDEBAR_INPUTS_BUILD, expectNoSidebarShadowMismatches } from './helpers/sidebar-shadow'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
@@ -9,7 +9,6 @@ import {
   WorkspaceRowsSnapshotSchema,
   type WorkspaceRow
 } from '../../src/shared/sidebar-list/workspace-rows'
-import type { AgentHookEndpoint } from '../../src/shared/agent-hook-endpoint-file'
 
 test.skip(
   !SIDEBAR_INPUTS_BUILD,
@@ -24,26 +23,6 @@ async function readMainRow(page: Page, rowKey: string): Promise<WorkspaceRow | u
     throw new Error('sidebarInputs.workspaceRows failed')
   }
   return WorkspaceRowsSnapshotSchema.parse(response.result).rows[rowKey]
-}
-
-async function postClaudeHook(
-  endpoint: AgentHookEndpoint,
-  pane: { paneKey: string; worktreeId: string },
-  payload: Record<string, unknown>
-): Promise<void> {
-  const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/claude`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Orca-Agent-Hook-Token': endpoint.token },
-    body: JSON.stringify({
-      paneKey: pane.paneKey,
-      tabId: pane.paneKey.split(':')[0],
-      worktreeId: pane.worktreeId,
-      env: endpoint.env,
-      version: endpoint.version,
-      payload: { session_id: 'sort-stamps-session', ...payload }
-    })
-  })
-  expect(response.status).toBe(204)
 }
 
 test('the host stamps a workspace as its agent is prompted, finishes and asks for input', async ({

@@ -3,9 +3,9 @@
  * into its status note and telemetry reason.
  */
 import type { SshManagedServerUpdateNote, SshTarget } from '../../shared/ssh-types'
-import type { ManagedOrcadAutoUpdateOutcome } from './orcad-managed-auto-update'
+import type { ManagedOrcadAutoUpdateOutcome } from '../managed-server/lifecycle/orcad-managed-auto-update'
 import type { HostServerUpdateReason } from './ssh-host-server-connect-events'
-import { ORCAD_ACTIVATION_FENCE_BUSY_CODE } from './orcad-activation-fence-hold'
+import { ORCAD_ACTIVATION_FENCE_BUSY_CODE } from '../managed-server/activation/orcad-activation-fence-hold'
 
 export type ManagedServerUpdateDeps = {
   /** Runs the Managed servers update when the host is behind this app; `onUpdating` fires first. */
@@ -15,8 +15,8 @@ export type ManagedServerUpdateDeps = {
   ) => Promise<ManagedOrcadAutoUpdateOutcome>
   /** Why an update to this app version already failed on the host, so it isn't retried. */
   recordedUpdateFailure: (target: SshTarget) => string | null
-  /** False once an update failed on this host during this app launch; a restart retries once. */
-  retryRecordedFailure: (target: SshTarget) => boolean
+  /** True once an update failed on this host during this app launch; a restart retries once. */
+  failedThisLaunch: (target: SshTarget) => boolean
   recordUpdateFailure: (target: SshTarget, reason: string) => void
   clearUpdateFailure: (target: SshTarget) => void
 }
@@ -41,7 +41,9 @@ export async function checkManagedServerUpdate(
   let result: ManagedOrcadAutoUpdateOutcome
   try {
     result = await deps.autoUpdate(environmentId, {
-      failedBefore: () => failure !== null && !deps.retryRecordedFailure(target),
+      // Why read inside: an overlapping check may record a failure while this one waits on the lock.
+      failedBefore: () =>
+        deps.recordedUpdateFailure(target) !== null && deps.failedThisLaunch(target),
       onUpdating
     })
   } catch (error) {
@@ -80,7 +82,7 @@ export async function checkManagedServerUpdate(
         recorded: false
       }
     case 'skipped':
-      return skipped(result.reason, failure)
+      return skipped(result.reason, deps.recordedUpdateFailure(target))
   }
 }
 

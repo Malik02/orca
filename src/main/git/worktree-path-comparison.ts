@@ -18,7 +18,7 @@ import { translateWslOutputPaths } from './runner'
  * as `\\wsl.localhost\Ubuntu\home\alice\Feature` and a plain `toLowerCase` folded the ext4 tail.
  * `foldWslUncPathCaseInsensitiveParts` already draws that line — Windows folds the share, the distro
  * and a drvfs `/mnt/<letter>` tail, and nothing else — and `git-fetch-head-lock` already relies on
- * it. `isSameCommonDirPath` carries a local copy of the POSIX half; this is both halves at the source.
+ * it.
  */
 export function canonicalWorktreePath(pathValue: string, platform = process.platform): string {
   if (looksLikePosixAbsolutePath(pathValue)) {
@@ -135,7 +135,7 @@ function looksLikeWindowsPath(pathValue: string): boolean {
 }
 
 // One leading slash only: `//server/share` and WSL UNC aliases are Windows roots, not POSIX paths.
-function looksLikePosixAbsolutePath(pathValue: string): boolean {
+export function looksLikePosixAbsolutePath(pathValue: string): boolean {
   return pathValue.startsWith('/') && !pathValue.startsWith('//')
 }
 
