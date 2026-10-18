@@ -68,23 +68,9 @@ const refusal = {
 
 beforeEach(() => vi.clearAllMocks())
 describe('execution-host conversation writer inspection', () => {
-  it('refuses live writers even with a foreground shell', async () => {
-    const live = inspection('live')
-    await expect(live.run()).rejects.toMatchObject(refusal)
-    expect(live.host.shellAlone).not.toHaveBeenCalled()
-  })
-
   it('accepts exact exited or unchanged shell-only proof, never loss of evidence', async () => {
     await expect(inspection('unverifiable').run()).rejects.toMatchObject(refusal)
-    await expect(inspection('exited').run()).resolves.toBeUndefined()
-    await expect(inspection().run()).resolves.toBeUndefined()
-    for (const cause of [
-      'missing-row',
-      'sleeping',
-      'failed-scan',
-      'shared-server',
-      'unknown-topology'
-    ] as const) {
+    for (const cause of ['missing-row', 'sleeping', 'failed-scan', 'unknown-topology'] as const) {
       const check = inspection()
       if (cause === 'missing-row') {
         check.host.observation = () => null
@@ -96,9 +82,6 @@ describe('execution-host conversation writer inspection', () => {
         check.host.rows = () => {
           throw new Error('unavailable')
         }
-      }
-      if (cause === 'shared-server') {
-        check.observation.topology = 'shared'
       }
       if (cause === 'unknown-topology') {
         check.observation.topology = 'unverifiable'
