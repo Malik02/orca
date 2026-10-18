@@ -332,7 +332,8 @@ function ChatRowWithCliSubmenu({
       >
         {children}
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent>
+      {/* Why -5: the submenu's 4px padding plus 1px border would drop its row below the trigger row. */}
+      <DropdownMenuSubContent alignOffset={-5}>
         <DropdownMenuItem
           variant="launch"
           disabled={disabled}
