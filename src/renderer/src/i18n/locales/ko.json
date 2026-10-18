@@ -18742,7 +18742,10 @@
       "resumeCommand": {
         "description": "Agent 세션 기록 열기",
         "argumentHint": "[검색]",
-        "workspaceUnavailable": "이 채팅의 워크스페이스가 아직 로드되지 않았습니다. 잠시 후 /resume을 다시 실행하세요."
+        "workspaceUnavailable": "이 채팅의 워크스페이스가 아직 로드되지 않았습니다. 잠시 후 /resume을 다시 실행하세요.",
+        "replaceTitle": "이 채팅을 바꿀까요?",
+        "replaceDescription": "여기서 “{{title}}”을(를) 재개하면 이 채팅에서 {{agent}}이(가) 하고 있는 작업이 중지됩니다.",
+        "replace": "바꾸기"
       },
       "claudeSignIn": {
         "signingIn": "로그인 중…"

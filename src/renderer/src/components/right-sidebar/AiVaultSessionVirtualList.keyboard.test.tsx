@@ -24,9 +24,12 @@ vi.mock('./AiVaultSessionRow', () => ({
   VaultSessionRow: (props: { session: AiVaultSession }) => <div>{props.session.title}</div>
 }))
 // The host's side of a resumed chat: it admits the chat, then the launch settles as the test says.
-const launch = vi.hoisted((): { settlement: StructuredAgentLaunchSettlement } => ({
-  settlement: { kind: 'structured', sessionId: 'new' }
-}))
+const launch = vi.hoisted(
+  (): { sessionId: string; settlement: StructuredAgentLaunchSettlement } => ({
+    sessionId: 'new',
+    settlement: { kind: 'structured', sessionId: 'new' }
+  })
+)
 vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForResume: async (session: AiVaultSession) => session
 }))
@@ -35,7 +38,7 @@ vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => ({
   adoptAgentSessionLaunchVerdict: (verdict: AgentSessionLaunchVerdict) => ({
     ...verdict,
     begin: () => ({
-      sessionId: 'new',
+      sessionId: launch.sessionId,
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       settlement: Promise.resolve(launch.settlement),
       cancel: vi.fn()
@@ -53,14 +56,11 @@ vi.mock('@/lib/structured-agent-session-launch-admission', async (importOriginal
     cancel: vi.fn()
   })
 }))
-// What the host reports for each chat; an untouched one has no message yet.
-const hostStatus = vi.hoisted(() => new Map<string, { status: null }>())
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
   getStructuredAgentSessionStatusFeed: () => ({
-    getSnapshot: () => hostStatus,
-    getSessionObservation: () => 'live'
+    getSnapshot: () => new Map()
   })
 }))
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
@@ -184,7 +184,6 @@ function selectedTitle(): string | null {
 }
 
 beforeEach(() => {
-  hostStatus.clear()
   toastError.mockClear()
   // Why: happy-dom has no layout; give the virtualizer a bounded viewport and fixed rows.
   vi.stubGlobal('ResizeObserver', NoopResizeObserver)
@@ -234,7 +233,7 @@ describe('Session History keyboard selection', () => {
     expect(selectedTitle()).toBe('Session 0')
   })
 
-  it('Enter resumes a row in place of the chat: after it, closing it only once idle and confirmed', async () => {
+  it('Enter replaces the chat: an idle one at once, a busy one only after Replace', async () => {
     const workspaceId = 'repo-1::/repo'
     const store = useAppStore.getState
     useAppStore.setState(useAppStore.getInitialState(), true)
@@ -249,17 +248,16 @@ describe('Session History keyboard selection', () => {
     }
     const order = () => store().groupsByWorktree[workspaceId]?.[0]?.tabOrder
     const resumed = structuredAgentSessionTabId('new')
-    const { press } = renderList({
-      resumeHere: { tabId: 'old', workspaceId, agent: 'claude', dismiss: vi.fn() }
-    })
+    const confirm = vi.fn<(options: unknown) => Promise<boolean>>()
+    const here = { workspaceId, agent: 'claude' as const, dismiss: vi.fn(), confirm }
+    const { press } = renderList({ resumeHere: { ...here, tabId: 'old' } })
     const settle = async () =>
       act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
       })
-    const pickFirstRow = async (settlement: StructuredAgentLaunchSettlement) => {
+    const pick = async (settlement: StructuredAgentLaunchSettlement, enter = press) => {
       launch.settlement = settlement
-      act(() => store().activateTab('old', { worktreeId: workspaceId }))
-      press('Enter')
+      enter('Enter')
       await settle()
     }
 
@@ -267,38 +265,37 @@ describe('Session History keyboard selection', () => {
     await settle()
     expect(order()).toEqual(['old', 'other'])
 
-    await pickFirstRow({ kind: 'failed', error: new Error('refused') })
+    act(() => store().activateTab('old', { worktreeId: workspaceId }))
+    await pick({ kind: 'failed', error: new Error('refused') })
     expect(order()).toEqual(['old', 'other'])
     expect(store().groupsByWorktree[workspaceId]?.[0]?.activeTabId).toBe('old')
 
     // An unknown outcome keeps both tabs; the new one carries its own badge and Retry.
-    await pickFirstRow({ kind: 'visibility-unknown', sessionId: 'new' })
+    await pick({ kind: 'visibility-unknown', sessionId: 'new' })
     expect(order()).toEqual(['old', resumed, 'other'])
     act(() => store().closeUnifiedTab(resumed))
 
-    // A chat still replying keeps running beside its replacement.
+    // A chat still replying asks first: Cancel changes nothing, Replace replaces it.
     const paneKey = structuredAgentSessionPaneKey('old', 'old')
+    const working = { state: 'working', prompt: '', updatedAt: 0, stateStartedAt: 0 } as const
     useAppStore.setState({
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          state: 'working',
-          prompt: '',
-          updatedAt: 0,
-          stateStartedAt: 0,
-          paneKey,
-          stateHistory: []
-        }
-      }
+      agentStatusByPaneKey: { [paneKey]: { ...working, paneKey, stateHistory: [] } }
     })
-    await pickFirstRow({ kind: 'structured', sessionId: 'new' })
-    expect(order()).toEqual(['old', resumed, 'other'])
-
-    // The main path: a new, empty chat is replaced by the conversation picked in it.
-    act(() => store().closeUnifiedTab(resumed))
-    useAppStore.setState({ agentStatusByPaneKey: {} })
-    hostStatus.set('old', { status: null })
-    await pickFirstRow({ kind: 'structured', sessionId: 'new' })
+    confirm.mockResolvedValueOnce(false)
+    await pick({ kind: 'structured', sessionId: 'new' })
+    expect(order()).toEqual(['old', 'other'])
+    expect(here.dismiss).toHaveBeenCalledOnce()
+    confirm.mockResolvedValueOnce(true)
+    await pick({ kind: 'structured', sessionId: 'new' })
     expect(order()).toEqual([resumed, 'other'])
+
+    // An idle chat is replaced with no prompt.
+    launch.sessionId = 'new-2'
+    const idle = renderList({ resumeHere: { ...here, tabId: 'other' } })
+    await pick({ kind: 'structured', sessionId: 'new-2' }, idle.press)
+    expect(order()).toEqual([resumed, structuredAgentSessionTabId('new-2')])
+    expect(confirm).toHaveBeenCalledTimes(2)
+    launch.sessionId = 'new'
   })
 
   it('closes the picker, with no error, when the host says this chat already holds the row', async () => {
@@ -320,7 +317,7 @@ describe('Session History keyboard selection', () => {
     launch.settlement = { kind: 'failed', error: Object.assign(new Error('refused'), { refusal }) }
     const dismiss = vi.fn()
     const { press } = renderList({
-      resumeHere: { tabId: 'old', workspaceId, agent: 'claude', dismiss }
+      resumeHere: { tabId: 'old', workspaceId, agent: 'claude', dismiss, confirm: vi.fn() }
     })
     press('Enter')
     await act(async () => {

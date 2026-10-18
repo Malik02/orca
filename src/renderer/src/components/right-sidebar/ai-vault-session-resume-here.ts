@@ -1,13 +1,22 @@
 import { useAppStore } from '@/store'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+import {
+  captureNativeChatComposerFocusIntent,
+  requestNativeChatComposerFocus
+} from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+import { translate } from '@/i18n/i18n'
+import { agentLabel } from '../../../../shared/ai-vault-session-filters'
 import {
   aiVaultHistoryAgents,
   type AiVaultAgent,
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
-import { adoptsCliConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
+import {
+  adoptsCliConversations,
+  type CliConversationRowAgent
+} from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
 import { getStructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch-registry'
@@ -16,10 +25,6 @@ import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import type { AiVaultSessionRowChatActions } from './ai-vault-session-chat-action'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
-import {
-  readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '../native-chat/native-chat-composer-draft-store'
 
 /** The chat `/resume` was typed in; a picked row's conversation takes its place. */
 export type AiVaultResumeHere = {
@@ -29,12 +34,13 @@ export type AiVaultResumeHere = {
   agent?: AiVaultAgent
   /** Picking the chat's own conversation only closes the picker; a no-op once it has closed. */
   dismiss: () => void
+  confirm: ConfirmationDialogContextValue
 }
 
 /**
  * A tab is one conversation, so "resume here" opens the picked conversation's own chat right after
- * this one and closes this one once that chat exists. False: the row can't take this chat's place;
- * otherwise the pick settles once its outcome is known.
+ * this one and closes this one once that chat exists; a busy chat asks first. False: the row can't
+ * take this chat's place; otherwise the pick settles once its outcome is known.
  */
 export function resumeAiVaultSessionHere(args: {
   session: AiVaultSession
@@ -59,23 +65,54 @@ export function resumeAiVaultSessionHere(args: {
   if (!here.agent || !aiVaultHistoryAgents(here.agent).includes(session.agent)) {
     return false
   }
+  let replace: () => Promise<void>
   if (structured) {
     if (structured.workspaceId !== here.workspaceId) {
       return false
     }
-    return activateAiVaultStructuredSession(session).then(() => {
-      // It also settles true after a reopen it could only report, so only a tab that exists replaces.
-      if (findChatTabWhere(here.workspaceId, (tab) => tab.entityId === structured.sessionId)) {
-        closeReplacedChat(here)
-      }
-    })
-  }
-  if (
-    actions.resumeInNewChatWorkspaceId !== here.workspaceId ||
-    !adoptsCliConversations(session.agent)
+    replace = () =>
+      activateAiVaultStructuredSession(session).then(() => {
+        // It also settles true after a reopen it could only report, so only a tab that exists replaces.
+        if (findChatTabWhere(here.workspaceId, (tab) => tab.entityId === structured.sessionId)) {
+          closeReplacedChat(here)
+        }
+      })
+  } else if (
+    actions.resumeInNewChatWorkspaceId === here.workspaceId &&
+    adoptsCliConversations(session.agent)
   ) {
+    const rowAgent = session.agent
+    replace = () => resumeInPlaceOf(here, session, rowAgent)
+  } else {
     return false
   }
+  const chat = findChatTab(here)
+  if (!chat || !isChatBusy(here.workspaceId, chat)) {
+    return replace()
+  }
+  // Replacing stops the chat's agent, so a busy one asks first; the picker closes so prompts never stack.
+  here.dismiss()
+  return here
+    .confirm({
+      title: translate('components.native-chat.resumeCommand.replaceTitle', 'Replace this chat?'),
+      description: translate(
+        'components.native-chat.resumeCommand.replaceDescription',
+        'Resuming “{{title}}” here will stop what {{agent}} is doing in this chat.',
+        { title: session.title, agent: agentLabel(here.agent) }
+      ),
+      confirmLabel: translate('components.native-chat.resumeCommand.replace', 'Replace'),
+      confirmVariant: 'destructive',
+      initialFocus: 'confirm',
+      compact: true
+    })
+    .then((confirmed) => (confirmed ? replace() : requestNativeChatComposerFocus(chat.id)))
+}
+
+function resumeInPlaceOf(
+  here: AiVaultResumeHere,
+  session: AiVaultSession,
+  rowAgent: CliConversationRowAgent
+): Promise<void> {
   const focus = captureNativeChatComposerFocusIntent()
   let openedTabId: string | null = null
   let resolve = (): void => undefined
@@ -84,7 +121,7 @@ export function resumeAiVaultSessionHere(args: {
   })
   void resumeAiVaultSessionInNewChat(
     session,
-    session.agent,
+    rowAgent,
     here.workspaceId,
     newAgentLaunchRequestId(),
     {
@@ -136,34 +173,26 @@ function findChatTab(here: AiVaultResumeHere): Tab | undefined {
 }
 
 function closeReplacedChat(here: AiVaultResumeHere): void {
-  const state = useAppStore.getState()
   const tab = findChatTab(here)
-  if (!tab || tab.isPinned) {
-    return
-  }
-  // Why: closing a chat stops its agent, so only a finished turn or an untouched chat closes; one
-  // replying, asking or still starting stays open beside the new chat, as does an unsent draft.
-  const status = state.agentStatusByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)]
-  const settled = status ? status.state === 'done' : isUntouchedChat(here.workspaceId, tab)
-  const draft = readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(tab.entityId))
-  if (settled && draft.text.trim() === '' && draft.images.length === 0) {
-    state.closeUnifiedTab(tab.id)
+  if (tab) {
+    // Direct close: the pin prompt belongs to the close commands, and this replacement was chosen.
+    useAppStore.getState().closeUnifiedTab(tab.id)
   }
 }
 
-/** Its launch finished and its host, observed live, reports no message and no starting child. */
-function isUntouchedChat(workspaceId: string, tab: Tab): boolean {
-  const lifecycle = getStructuredAgentSessionLaunchLifecycle(workspaceId, tab.entityId)
-  // The host stamped on the tab; an unstamped one can't be read, so it counts as busy.
-  const target = structuredAgentSessionTargetForHost(tab.executionHostId)
-  if ((lifecycle !== null && lifecycle !== 'published') || !target) {
-    return false
+/** Replying or asking (the status store), or still starting (its launch, or its host's provider). */
+function isChatBusy(workspaceId: string, tab: Tab): boolean {
+  const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+  const status = useAppStore.getState().agentStatusByPaneKey[paneKey]?.state
+  if (
+    (status && status !== 'done') ||
+    getStructuredAgentSessionLaunchLifecycle(workspaceId, tab.entityId) === 'pending'
+  ) {
+    return true
   }
-  const feed = getStructuredAgentSessionStatusFeed(target)
-  const summary = feed.getSnapshot().get(tab.entityId)
-  return (
-    feed.getSessionObservation(tab.entityId) === 'live' &&
-    summary?.status === null &&
-    summary.hostExecutionPhase !== 'starting'
-  )
+  const target = structuredAgentSessionTargetForHost(tab.executionHostId)
+  const summary = target
+    ? getStructuredAgentSessionStatusFeed(target).getSnapshot().get(tab.entityId)
+    : undefined
+  return summary?.hostExecutionPhase === 'starting'
 }

@@ -18953,7 +18953,10 @@
       "resumeCommand": {
         "description": "Open Agent Session History",
         "argumentHint": "[search]",
-        "workspaceUnavailable": "This chat's workspace isn't loaded yet. Try /resume again in a moment."
+        "workspaceUnavailable": "This chat's workspace isn't loaded yet. Try /resume again in a moment.",
+        "replaceTitle": "Replace this chat?",
+        "replaceDescription": "Resuming “{{title}}” here will stop what {{agent}} is doing in this chat.",
+        "replace": "Replace"
       },
       "hostPermission": {
         "checking": "Checking this host's chat permissions…",

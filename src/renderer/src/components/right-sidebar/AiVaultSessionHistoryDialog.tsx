@@ -5,6 +5,7 @@ import type { AppState } from '@/store/types'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { AI_VAULT_AGENTS, aiVaultHistoryAgents } from '../../../../shared/ai-vault-types'
 import AiVaultPanel from './AiVaultPanel'
@@ -27,6 +28,7 @@ function selectVisibleTabs(state: AppState, chatWorkspaceId: string | null): str
 export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null {
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
+  const confirm = useConfirmationDialog()
   const request = readAgentSessionHistoryModalRequest(modalData)
   const chatWorkspaceId = request?.workspace.worktreeId ?? null
   const panelRef = useRef<AiVaultPanelHandle>(null)
@@ -96,7 +98,8 @@ export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null 
                 if (useAppStore.getState().modalData === modalData) {
                   closeModal()
                 }
-              }
+              },
+              confirm
             }}
             headerAction={
               <DialogClose asChild>

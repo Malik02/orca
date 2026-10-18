@@ -18702,7 +18702,10 @@
       "resumeCommand": {
         "description": "Abrir el historial de sesiones de agentes",
         "argumentHint": "[búsqueda]",
-        "workspaceUnavailable": "El workspace de este chat aún no se ha cargado. Vuelve a probar /resume en un momento."
+        "workspaceUnavailable": "El workspace de este chat aún no se ha cargado. Vuelve a probar /resume en un momento.",
+        "replaceTitle": "¿Reemplazar este chat?",
+        "replaceDescription": "Reanudar “{{title}}” aquí detendrá lo que {{agent}} está haciendo en este chat.",
+        "replace": "Reemplazar"
       },
       "claudeSignIn": {
         "signingIn": "Iniciando sesión…"

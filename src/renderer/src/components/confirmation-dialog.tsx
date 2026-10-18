@@ -48,6 +48,8 @@ export function ConfirmationDialogProvider({
   // Why: Radix keeps dialog content mounted while closing; keep labels stable without a post-render Effect.
   const displayedRequest = activeRequest ?? lastDisplayedRequestRef.current
   const Icon = displayedRequest?.options.icon
+  const compact = displayedRequest?.options.compact === true
+  const buttonSize = compact ? 'sm' : 'default'
 
   useEffect(() => {
     // Why: this provider's dialog is not represented by activeModal. Block
@@ -100,7 +102,7 @@ export function ConfirmationDialogProvider({
       >
         <DialogContent
           showCloseButton={false}
-          className={cn('sm:max-w-md', Icon && 'gap-6')}
+          className={cn(compact ? 'max-w-sm' : 'sm:max-w-md', Icon && 'gap-6')}
           onOpenAutoFocus={(event) => {
             if (activeRequest?.options.initialFocus === 'confirm') {
               event.preventDefault()
@@ -115,12 +117,15 @@ export function ConfirmationDialogProvider({
               </div>
             )}
             <DialogHeader className={cn(Icon && 'min-w-0 gap-2 text-left')}>
-              <DialogTitle>{displayedRequest?.options.title}</DialogTitle>
+              <DialogTitle className={cn(compact && 'text-sm')}>
+                {displayedRequest?.options.title}
+              </DialogTitle>
               {displayedRequest?.options.description ? (
                 // Callers pass multi-line descriptions (e.g. one path per line).
                 <DialogDescription
                   className={cn(
                     'whitespace-pre-line',
+                    compact && 'text-xs',
                     displayedRequest.options.descriptionClassName
                   )}
                 >
@@ -147,12 +152,14 @@ export function ConfirmationDialogProvider({
           ) : null}
           <DialogFooter
             className={cn(
+              compact && 'gap-2',
               Icon && '-mx-6 -mb-6 rounded-b-lg border-t border-border bg-muted/30 px-6 py-4'
             )}
           >
             <Button
               type="button"
               variant={displayedRequest?.options.cancelVariant ?? 'outline'}
+              size={buttonSize}
               onClick={() => settleActiveRequest(false)}
             >
               {displayedRequest?.options.cancelLabel ??
@@ -162,6 +169,7 @@ export function ConfirmationDialogProvider({
               ref={confirmButtonRef}
               type="button"
               variant={displayedRequest?.options.confirmVariant ?? 'default'}
+              size={buttonSize}
               onClick={() => settleActiveRequest(true)}
             >
               {displayedRequest?.options.confirmLabel ??

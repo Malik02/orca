@@ -18742,7 +18742,10 @@
       "resumeCommand": {
         "description": "Agent セッション履歴を開く",
         "argumentHint": "[検索]",
-        "workspaceUnavailable": "このチャットのワークスペースはまだ読み込まれていません。少し待ってからもう一度 /resume を実行してください。"
+        "workspaceUnavailable": "このチャットのワークスペースはまだ読み込まれていません。少し待ってからもう一度 /resume を実行してください。",
+        "replaceTitle": "このチャットを置き換えますか？",
+        "replaceDescription": "ここで「{{title}}」を再開すると、このチャットで {{agent}} が行っている処理が停止します。",
+        "replace": "置き換える"
       },
       "claudeSignIn": {
         "signingIn": "サインイン中…"

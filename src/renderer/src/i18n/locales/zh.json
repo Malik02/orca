@@ -18707,7 +18707,10 @@
       "resumeCommand": {
         "description": "打开智能体会话历史",
         "argumentHint": "[搜索]",
-        "workspaceUnavailable": "此聊天的工作区尚未加载。请稍后再试一次 /resume。"
+        "workspaceUnavailable": "此聊天的工作区尚未加载。请稍后再试一次 /resume。",
+        "replaceTitle": "替换此聊天？",
+        "replaceDescription": "在此恢复“{{title}}”将停止 {{agent}} 在此聊天中正在进行的工作。",
+        "replace": "替换"
       },
       "claudeSignIn": {
         "signingIn": "正在登录…"

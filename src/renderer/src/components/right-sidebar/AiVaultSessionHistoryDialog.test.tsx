@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { useAppStore } from '@/store'
 import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
 import { openAgentSessionHistoryModal } from './agent-session-history-modal'
@@ -68,15 +69,17 @@ const OTHER_WORKTREE = 'repo-1::/repo/other'
 function Host({ withSidebar = false }: { withSidebar?: boolean }) {
   const open = useAppStore((s) => s.activeModal === 'agent-session-history')
   return (
-    <TooltipProvider>
-      <textarea aria-label="Composer" />
-      {withSidebar ? (
-        <div data-testid="sidebar">
-          <AiVaultSidebarPanel />
-        </div>
-      ) : null}
-      {open ? <AiVaultSessionHistoryDialog /> : null}
-    </TooltipProvider>
+    <ConfirmationDialogProvider>
+      <TooltipProvider>
+        <textarea aria-label="Composer" />
+        {withSidebar ? (
+          <div data-testid="sidebar">
+            <AiVaultSidebarPanel />
+          </div>
+        ) : null}
+        {open ? <AiVaultSessionHistoryDialog /> : null}
+      </TooltipProvider>
+    </ConfirmationDialogProvider>
   )
 }
 
