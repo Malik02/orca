@@ -7,11 +7,11 @@ import {
 } from './agent-status-run'
 import { normalizeAgentStatusPayload } from './agent-status-types'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
-import { measureUtf8ByteLength } from './utf8-byte-limits'
 
-const MAX_STATUS_BYTES = 256 * 1024
 const MAX_ID_LENGTH = 4_096
-const STATUS_STRUCTURE_LIMITS = { structuralTokens: 16_384, nestingDepth: 24 } as const
+// Why: a pane's subagent roster has no count limit, and its inputs are already bounded where they
+// arrive (hook request body, OSC payload); only nesting depth is checked here.
+const STATUS_STRUCTURE_LIMITS = { structuralTokens: Number.MAX_SAFE_INTEGER, nestingDepth: 24 } as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -51,9 +51,6 @@ function copyJsonRecord(value: unknown): Record<string, unknown> | null {
   try {
     serialized = JSON.stringify(value)
   } catch {
-    return null
-  }
-  if (measureUtf8ByteLength(serialized, { stopAfterBytes: MAX_STATUS_BYTES }).exceededLimit) {
     return null
   }
   try {

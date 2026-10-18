@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { AGENT_STATUS_MAX_SUBAGENTS } from '../../shared/agent-status-types'
 import { createAgentStatusExtensionHarness } from './agent-status-extension-test-harness'
 import {
   agentEndCount,
@@ -309,18 +308,15 @@ describe('Pi child rows', () => {
     expect(childIds(posts(harness)[1])).toEqual(['run-b'])
   })
 
-  // Why: the generated cap is interpolated from the host's, so a drift would show up here
-  // as an over-long roster the host would silently truncate on arrival.
-  it('caps the posted roster at the host limit', async () => {
+  it('posts every running child', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
     await harness.callHook('agent_start')
-    for (let index = 0; index < AGENT_STATUS_MAX_SUBAGENTS + 4; index++) {
+    for (let index = 0; index < 40; index++) {
       startAsync(harness, `run-${index}`, 'scout')
     }
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(childIds(posts(harness).at(-1))).toHaveLength(AGENT_STATUS_MAX_SUBAGENTS)
-    expect(childIds(posts(harness).at(-1))?.at(-1)).toBe(`run-${AGENT_STATUS_MAX_SUBAGENTS - 1}`)
+    expect(childIds(posts(harness).at(-1))).toHaveLength(40)
   })
 
   it('posts nothing for the end of a run it is not tracking', async () => {

@@ -34,7 +34,6 @@ export {
   AGENT_TYPE_MAX_LENGTH
 } from './agent-status-field-normalization'
 export {
-  AGENT_STATUS_MAX_SUBAGENTS,
   agentSubagentsEqual,
   type AgentSubagentSnapshot,
   type AgentSubagentState

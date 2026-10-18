@@ -1,7 +1,6 @@
-import {
-  AGENT_STATUS_STORE_LIMITS,
-  type AgentStatusStoreMutation,
-  type AgentStatusStoreSnapshot
+import type {
+  AgentStatusStoreMutation,
+  AgentStatusStoreSnapshot
 } from './agent-status-store-contract'
 import {
   isAgentStatusStoreEpoch,
@@ -9,7 +8,6 @@ import {
   parseAgentStatusStoreSnapshot
 } from './agent-status-store-codec'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
-import { measureUtf8ByteLength } from './utf8-byte-limits'
 
 const ENVELOPE_STRUCTURE_LIMITS = {
   structuralTokens: 512 * 1024,
@@ -83,27 +81,12 @@ export function serializeAgentStatusTransportEnvelope(
   if (!parsed) {
     throw new Error('Invalid agent status transport envelope')
   }
-  const serialized = JSON.stringify(parsed)
-  if (
-    measureUtf8ByteLength(serialized, {
-      stopAfterBytes: AGENT_STATUS_STORE_LIMITS.serializedBytes
-    }).exceededLimit
-  ) {
-    throw new Error('Agent status transport envelope exceeds its serialized-byte limit')
-  }
-  return serialized
+  return JSON.stringify(parsed)
 }
 
 export function deserializeAgentStatusTransportEnvelope(
   serialized: string
 ): AgentStatusTransportEnvelope | null {
-  if (
-    measureUtf8ByteLength(serialized, {
-      stopAfterBytes: AGENT_STATUS_STORE_LIMITS.serializedBytes
-    }).exceededLimit
-  ) {
-    return null
-  }
   try {
     assertJsonTextStructureWithinLimits(serialized, ENVELOPE_STRUCTURE_LIMITS)
     return parseAgentStatusTransportEnvelope(JSON.parse(serialized))

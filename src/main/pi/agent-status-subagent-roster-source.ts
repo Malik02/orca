@@ -2,7 +2,7 @@
 // generated extension holds the pane's completion until every child it saw start is gone.
 
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
-import { AGENT_STATUS_MAX_SUBAGENTS } from '../../shared/agent-status-types'
+import { HOOK_REQUEST_MAX_BYTES } from '../../shared/agent-hook-listener/request-body'
 
 // Module scope: post() reads the roster when a body is built, so a coalesced or
 // retried post always carries the children live at delivery.
@@ -10,8 +10,10 @@ export function getPiSubagentSnapshotSourceLines(): string[] {
   return [
     'type SubagentDetail = { agentType?: string; description?: string; startedAt: number; workflow?: boolean; parent?: string; registration?: object }',
     'type SubagentRoster = { active: Set<string>; exited?: Set<string>; details?: Map<string, SubagentDetail>; waiting: boolean; ownsPane?: boolean; runGeneration?: number; endedRunGeneration?: number; completionPostedGeneration?: number; parked?: Map<string, Map<string, SubagentDetail>>; onEvent?: (event: unknown, forcedStatus?: string) => void; listener?: (event: unknown) => void; onRunnerExit?: (event: unknown) => void; runnerExitListener?: (event: unknown) => void; runnerExitCheck?: ReturnType<typeof setTimeout> | null; onRunnerExitSettled?: () => void }',
-    // Why: interpolated, not re-typed, so the extension cap cannot drift from the host's.
-    `const MAX_SUBAGENT_SNAPSHOT = ${AGENT_STATUS_MAX_SUBAGENTS}`,
+    // Why: the host refuses an oversized body whole. Half its limit also keeps the roster under
+    // the host's JSON structure-token limit; interpolated so it cannot drift from the host's.
+    `const HOOK_BODY_BUDGET_BYTES = ${Math.floor(HOOK_REQUEST_MAX_BYTES / 2)}`,
+    "const SUBAGENTS_FIELD_BYTES = Buffer.byteLength(',\"subagents\":[]')",
     'let subagentRoster: SubagentRoster | null = null',
     '',
     // Why: an exited runner is already gone, and a pi-subagents workflow run is the lead
@@ -20,14 +22,18 @@ export function getPiSubagentSnapshotSourceLines(): string[] {
     '  return roster.active.has(id) && !roster.exited?.has(id) && roster.details?.get(id)?.workflow !== true',
     '}',
     '',
-    'function subagentPayload(): Record<string, unknown> {',
+    // Only the posted rows are fitted to the body; the active set keeps every child.
+    'function subagentPayload(byteBudget: number): Record<string, unknown> {',
     '  if (!subagentRoster) return {}',
     '  const subagents: Record<string, unknown>[] = []',
+    '  let bytes = SUBAGENTS_FIELD_BYTES',
     '  for (const id of subagentRoster.active) {',
     '    if (!isVisibleSubagent(subagentRoster, id)) continue',
     '    const detail = subagentRoster.details?.get(id)',
-    "    subagents.push({ id, state: 'working', startedAt: detail?.startedAt ?? 0, ...(detail?.agentType ? { agentType: detail.agentType } : {}), ...(detail?.description ? { description: detail.description } : {}) })",
-    '    if (subagents.length >= MAX_SUBAGENT_SNAPSHOT) break',
+    "    const subagent = { id, state: 'working', startedAt: detail?.startedAt ?? 0, ...(detail?.agentType ? { agentType: detail.agentType } : {}), ...(detail?.description ? { description: detail.description } : {}) }",
+    '    bytes += Buffer.byteLength(JSON.stringify(subagent)) + (subagents.length > 0 ? 1 : 0)',
+    '    if (bytes > byteBudget) break',
+    '    subagents.push(subagent)',
     '  }',
     '  return subagents.length > 0 ? { subagents } : {}',
     '}',
