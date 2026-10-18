@@ -30,7 +30,13 @@ import type { RuntimeBrowserTabCatalog } from './browser-tab-catalog'
 
 export class RuntimeBrowserProfiles {
   constructor(
-    private readonly host: Pick<RuntimeBrowserCommandHost, 'getAuthoritativeWindow'>,
+    private readonly host: Pick<
+      RuntimeBrowserCommandHost,
+      | 'getAuthoritativeWindow'
+      | 'getRuntimeBrowserPageRegistry'
+      | 'getBrowserHostLeaseRegistry'
+      | 'notifyHeadlessBrowserSessionTabsChanged'
+    >,
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
       'requireAgentBrowserBridge' | 'resolveBrowserCommandTarget'
@@ -44,8 +50,11 @@ export class RuntimeBrowserProfiles {
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabSetProfileResult> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
+    const pages = this.host.getRuntimeBrowserPageRegistry()
+    const activeClientPage = pages.listPages(target.worktreeId).find((page) => page.active)
     const browserPageId =
       target.browserPageId ??
+      activeClientPage?.browserPageId ??
       this.targets.requireAgentBrowserBridge().getActivePageId(target.worktreeId)
     if (!browserPageId) {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
@@ -59,6 +68,37 @@ export class RuntimeBrowserProfiles {
         'invalid_argument',
         `Browser profile ${params.profileId} was not found`
       )
+    }
+
+    const clientPage = pages.getPage(browserPageId)
+    if (clientPage) {
+      if (target.worktreeId && clientPage.workspaceId !== target.worktreeId) {
+        throw new BrowserError('invalid_argument', 'Browser page belongs to another workspace')
+      }
+      if (clientPage.browserProfileId === profile.id) {
+        return { browserPageId, profileId: profile.id, profileLabel: profile.label }
+      }
+      const authority = this.host.getBrowserHostLeaseRegistry()
+      const placement = await authority.switchClientPageProfile(
+        {
+          authorityRuntimeId: authority.authorityRuntimeId,
+          authorityEpoch: authority.authorityEpoch,
+          browserPageId,
+          browserHostClientId: clientPage.placement.browserHostClientId,
+          browserHostGeneration: clientPage.placement.browserHostGeneration,
+          pageHostGeneration: clientPage.placement.pageHostGeneration
+        },
+        { id: profile.id, label: profile.label, scope: profile.scope }
+      )
+      pages.replaceClientPagePlacement(
+        browserPageId,
+        clientPage.placement,
+        placement,
+        undefined,
+        profile.id
+      )
+      this.host.notifyHeadlessBrowserSessionTabsChanged?.(clientPage.workspaceId)
+      return { browserPageId, profileId: profile.id, profileLabel: profile.label }
     }
 
     // Why: short-circuit no-op switches so the renderer doesn't needlessly tear down and remount the webview.

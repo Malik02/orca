@@ -1,3 +1,4 @@
+import { BROWSER_HOST_WEBVIEW_CAPABILITY } from './browser-host-capability-selection'
 import type { BrowserClientHostCommandResult } from '../../../shared/browser-client-host-protocol'
 import {
   DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS,
@@ -38,10 +39,10 @@ export async function createBrowserHostClientPage(
   }
 ): Promise<RuntimeBrowserClientPlacement> {
   const timeoutMs = clientPageCreationTimeout(options.timeoutMs)
-  const lease = dependencies.selectLease(
-    options.browserHostClientId,
-    options.requiredCapabilities ?? []
-  )
+  const lease = dependencies.selectLease(options.browserHostClientId, [
+    BROWSER_HOST_WEBVIEW_CAPABILITY,
+    ...(options.requiredCapabilities ?? [])
+  ])
   if (lease.pairedDeviceId !== options.pairedDeviceId) {
     throw new Error('browser_host_lease_stale')
   }
@@ -110,7 +111,7 @@ export async function createBrowserHostClientPage(
   }
 }
 
-function clientPageCreationTimeout(timeoutMs: number | undefined): number {
+export function clientPageCreationTimeout(timeoutMs: number | undefined): number {
   const resolved = timeoutMs ?? DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS
   if (
     !Number.isInteger(resolved) ||
@@ -122,7 +123,7 @@ function clientPageCreationTimeout(timeoutMs: number | undefined): number {
   return resolved
 }
 
-async function waitForClientPageCreationResult(
+export async function waitForClientPageCreationResult(
   result: Promise<BrowserClientHostCommandResult>,
   timeoutMs: number
 ): Promise<BrowserClientHostCommandResult> {
@@ -144,7 +145,7 @@ async function waitForClientPageCreationResult(
   }
 }
 
-function closeUncommittedClientPage(
+export function closeUncommittedClientPage(
   state: BrowserHostLeaseState,
   browserPageId: string,
   placement: RuntimeBrowserClientPlacement

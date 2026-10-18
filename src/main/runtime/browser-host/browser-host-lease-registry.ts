@@ -1,3 +1,5 @@
+import { switchBrowserHostClientProfile } from './browser-host-client-profile-switch'
+import type { BrowserClientProfileMetadata } from '../../../shared/browser-client-profile-switch-protocol'
 import { randomUUID } from 'node:crypto'
 import type {
   BrowserClientHostCommandEvent,
@@ -28,10 +30,7 @@ import type {
 import { requireLiveBrowserClientPage } from './browser-host-page-authority'
 import type { BrowserHostFenceReason } from './browser-host-lease-fence'
 import { dispatchBrowserHostLeaseFence } from './browser-host-lease-fence-dispatch'
-import {
-  BROWSER_HOST_WEBVIEW_CAPABILITY,
-  selectBrowserHostLease
-} from './browser-host-capability-selection'
+import { selectBrowserHostLease } from './browser-host-capability-selection'
 import {
   createBrowserHostClientPage,
   type BrowserClientPageExecutionHostGrant,
@@ -208,14 +207,22 @@ export class BrowserHostLeaseRegistry {
     options: BrowserHostClientPageCreateOptions
   ): Promise<RuntimeBrowserClientPlacement> {
     return createBrowserHostClientPage(options, {
-      selectLease: (browserHostClientId, requiredCapabilities) =>
-        this.select(browserHostClientId, [
-          BROWSER_HOST_WEBVIEW_CAPABILITY,
-          ...requiredCapabilities
-        ]),
+      selectLease: (clientId, capabilities) => this.select(clientId, capabilities),
       requireLeaseState: (lease) => this.requireLeaseState(lease),
       pagePlacements: this.pagePlacements,
       executionHostGrants: this.clientPageExecutionHostGrants
+    })
+  }
+
+  switchClientPageProfile(
+    authority: BrowserClientPageAuthority,
+    profile: BrowserClientProfileMetadata
+  ) {
+    return switchBrowserHostClientProfile(authority, profile, {
+      registry: this,
+      state: (clientId) => this.requireLeaseState(this.select(clientId, [])),
+      placements: this.pagePlacements,
+      grants: this.clientPageExecutionHostGrants
     })
   }
 

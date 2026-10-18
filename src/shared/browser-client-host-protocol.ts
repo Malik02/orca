@@ -1,3 +1,4 @@
+import { BrowserClientProfileSwitchCommand } from './browser-client-profile-switch-protocol'
 import { z } from 'zod'
 import {
   BrowserClientAutomationCommand,
@@ -267,6 +268,7 @@ const BrowserClientHostRestorePageCommand = z.object({
 })
 
 export const BrowserClientHostPageCommand = z.discriminatedUnion('type', [
+  BrowserClientProfileSwitchCommand,
   BrowserClientHostCreatePageCommand,
   BrowserClientHostNavigateCommand,
   BrowserClientHostReclaimPageCommand,

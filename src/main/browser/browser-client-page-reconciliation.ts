@@ -45,6 +45,7 @@ export function executeBrowserClientPageReconciliationCommand(
       return closeReconciledPage(context, event, signal)
     case 'restorePage':
       return restorePage(context, event, signal)
+    case 'switchProfile':
     case 'createPage':
     case 'navigate':
     case 'automation':
