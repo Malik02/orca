@@ -288,3 +288,17 @@ export function resolveOwnerWithLegacyFallback(
   }
   return match.kind === 'resolved' ? match : { kind: 'resolved', owner: SELF_LOCAL_AUTHORITY }
 }
+
+/**
+ * The paired server behind {@link resolveOwnerWithLegacyFallback}, or `null` for this app, a
+ * directly dialed SSH target or a twin: for readers whose twin answer is "no server", as before.
+ */
+export function runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+  state: WorktreeRuntimeOwnerState,
+  workspaceId: string
+): string | null {
+  const match = resolveOwnerWithLegacyFallback(state, { workspaceId })
+  return match.kind === 'resolved' && match.owner.endpoint.kind === 'environment'
+    ? match.owner.endpoint.environmentId
+    : null
+}

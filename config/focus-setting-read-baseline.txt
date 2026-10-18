@@ -164,7 +164,6 @@
 1 src/renderer/src/components/sidebar/WorkspaceKanbanDrawer.tsx
 1 src/renderer/src/components/sidebar/WorktreeCardPorts.tsx
 2 src/renderer/src/components/sidebar/WorktreeList.tsx
-1 src/renderer/src/components/sidebar/WorktreeRowOpenInSubMenu.tsx
 1 src/renderer/src/components/sidebar/WorktreeVisibilityDialog.tsx
 2 src/renderer/src/components/sidebar/delete-worktree-flow.ts
 1 src/renderer/src/components/sidebar/linear-agent-skill-runtime.ts
@@ -312,11 +311,10 @@
 1 src/renderer/src/lib/client-creation-action-error.ts
 3 src/renderer/src/lib/client-creation-action-policy.ts
 1 src/renderer/src/lib/default-creation-host.ts # the sanctioned reader of the default host
-1 src/renderer/src/lib/doc-preview-grants.ts
 1 src/renderer/src/lib/empty-workspace-default-agent-chat.ts
 3 src/renderer/src/lib/execute-open-editor-path-move.ts
 1 src/renderer/src/lib/execution-host-display-label.ts
-2 src/renderer/src/lib/execution-host-facts.ts
+1 src/renderer/src/lib/execution-host-facts.ts
 6 src/renderer/src/lib/file-preview.ts
 2 src/renderer/src/lib/folder-workspace-runtime-owner.ts
 6 src/renderer/src/lib/http-link-destinations.ts
@@ -351,12 +349,10 @@
 5 src/renderer/src/lib/workspace-browser-tab-open.ts
 1 src/renderer/src/lib/workspace-file-drag-source.ts
 1 src/renderer/src/lib/workspace-tab-palette-activation.ts
-1 src/renderer/src/lib/worktree-activation-pty-inventory.ts
 3 src/renderer/src/lib/worktree-activation.ts
 1 src/renderer/src/lib/worktree-creation-agent-seeds.ts
 1 src/renderer/src/lib/worktree-jump-navigation.ts
 2 src/renderer/src/lib/worktree-operation-route.ts
-1 src/renderer/src/lib/worktree-row-open-in-owner.ts
 7 src/renderer/src/lib/worktree-runtime-owner.ts # typed owner resolver, its null-collapsing wrapper, and the legacy-fallback adapter the folds move to (round 3 F0); deleting the deprecated pair (F8) nets it down
 1 src/renderer/src/lib/worktree-sort-order-host-split.ts
 1 src/renderer/src/runtime/local-structured-session-tabs-sync/snapshot-apply.ts
