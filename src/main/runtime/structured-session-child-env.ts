@@ -184,9 +184,10 @@ const SESSION_COMMAND_ENV_KEYS = [
  * that rebuilds a command's env from its own policy (Codex `shell_environment_policy`) drops them
  * otherwise, and the command can no longer say which session it speaks for.
  */
-export function structuredSessionCommandEnv(
-  child: SealedStructuredSessionChild
-): Record<string, string> {
+export function structuredSessionCommandEnv(child: {
+  env: Record<string, string>
+  envToDelete: readonly string[]
+}): Record<string, string> {
   const deleted = new Set(child.envToDelete)
   const commandEnv: Record<string, string> = {}
   for (const key of SESSION_COMMAND_ENV_KEYS) {
