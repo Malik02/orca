@@ -222,10 +222,17 @@ describe('execution-host conversation writer inspection', () => {
     ) => runtime.assertStructuredAdoptionTerminalWritersExited(agent, 'conversation', source)
     const shell = { pid: 10, ppid: 1, stat: 'Ss+', command: '/bin/zsh' }
     const census = async (run: () => Promise<void>) => {
-      // Any suspended or background child counts, whatever its name.
-      snapshot.mockResolvedValue([shell, { pid: 11, ppid: 10, stat: 'T', command: 'agent-alias' }])
-      await expect(run()).rejects.toMatchObject(refusal)
-      snapshot.mockResolvedValue([shell])
+      // A prompt's zpty worker left the session; any suspended or background job counts, whatever its name.
+      const worker = [
+        shell,
+        { pid: 20, ppid: 10, stat: 'Ss+', command: '-zsh -i' },
+        { pid: 21, ppid: 20, stat: 'S+', command: 'git status' }
+      ]
+      for (const stat of ['T', 'SN']) {
+        snapshot.mockResolvedValue([...worker, { pid: 22, ppid: 10, stat, command: 'agent-alias' }])
+        await expect(run()).rejects.toMatchObject(refusal)
+      }
+      snapshot.mockResolvedValue(worker)
       await expect(run()).resolves.toBeUndefined()
     }
     // The header switch inspects the pane it leaves even when nothing recorded the conversation.

@@ -26,8 +26,9 @@ export async function reportCliChatResumeFailure(
     }
     toast.error(
       refusal.code === 'agent_session_conflict' &&
-      refusal.details?.reason === 'conversationHeldElsewhere' && !owner
-        ? cliConversationExitGuidance(source.agent)
+        refusal.details?.reason === 'conversationHeldElsewhere' &&
+        !owner
+        ? cliConversationExitGuidance(source.agent, true)
         : translate(
             'auto.components.right.sidebar.AiVaultPanel.resumeInChatConflict',
             'Another chat is already holding this conversation.'

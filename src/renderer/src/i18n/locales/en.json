@@ -18713,6 +18713,7 @@
         "showTerminal": "Show terminal"
       },
       "resumeInNewChat": {
+        "exitUnconfirmedFromTerminal": "Orca can't confirm {{agent}} has exited in its terminal. Stop what's running there or close the terminal, then open this conversation from Session History.",
         "exitUnconfirmed": "Orca can't confirm {{agent}} has exited in its terminal. Stop what's running there or close the terminal, then try again.",
         "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
         "cannotResume": "This {{agent}} conversation can't be resumed in a native chat."

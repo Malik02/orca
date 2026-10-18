@@ -92,7 +92,8 @@ export async function inspectTerminalHostProcess(args: {
     if (session.processNameIsSpawnFile) {
       foregroundProcess = await session.confirmForegroundProcess()
     }
-    childProcessEvidence = await session.inspectChildProcesses()
+    // A steady-state poll never decides adoption or close, so it may read the cached process table.
+    childProcessEvidence = await session.inspectChildProcesses(args.steadyState !== true)
     // Unverifiable whatever `ps` says, and an MSYS `ps.exe` on PATH would flash a console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {

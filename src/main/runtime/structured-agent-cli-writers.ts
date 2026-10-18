@@ -44,7 +44,7 @@ export type CliWriterHost = {
   shellAlone: (pane: CliWriterPane) => Promise<boolean>
 }
 
-/** Unlike foreground ownership, an empty subtree excludes background and suspended writers too. */
+/** Unlike foreground ownership, any job left in the shell's session refuses, background and suspended too. */
 export async function posixCliWriterShellAlone(rootPid: number): Promise<boolean> {
   const index = getProcessTableIndex(await getFreshShellForegroundSnapshot())
   const root = index.byPid.get(rootPid)
@@ -53,7 +53,8 @@ export async function posixCliWriterShellAlone(rootPid: number): Promise<boolean
     !!root &&
     isShellProcess(executable) &&
     root.stat.includes('+') &&
-    collectDescendantsFromIndex(index, rootPid).length === 0
+    // A session leader below the shell has left this terminal (a prompt's zpty worker); its jobs never do.
+    collectDescendantsFromIndex(index, rootPid, (row) => row.stat.includes('s')).length === 0
   )
 }
 

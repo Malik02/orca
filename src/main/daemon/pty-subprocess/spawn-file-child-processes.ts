@@ -12,7 +12,10 @@ import type { PtyChildProcessVerdict } from '../../../shared/terminal-process-in
 import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
 import { isWindowsShellAloneInJob } from '../../providers/windows-shell-alone-in-job'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
-import { readWindowsProcessIdentityTableFresh } from '../../windows/windows-process-table'
+import {
+  readWindowsProcessIdentityTable,
+  readWindowsProcessIdentityTableFresh
+} from '../../windows/windows-process-table'
 
 function executableName(command: string): string {
   return getCommandTokenPathBasename(getFirstCommandToken(command)).replace(/^-/, '')
@@ -47,7 +50,11 @@ export function inspectSpawnFileChildProcessesFromRows(
     : 'no-children'
 }
 
-export async function inspectSpawnFileWindowsChildProcesses(proc: IPty, shellPath: string): Promise<PtyChildProcessVerdict> {
+export async function inspectSpawnFileWindowsChildProcesses(
+  proc: IPty,
+  shellPath: string,
+  fresh = true
+): Promise<PtyChildProcessVerdict> {
   try {
     const members = readWindowsPtyJobProcessIds(proc)
     const shellPid = ptyShellProcessId(proc)
@@ -55,7 +62,9 @@ export async function inspectSpawnFileWindowsChildProcesses(proc: IPty, shellPat
       return 'unverifiable'
     }
     const alone = await isWindowsShellAloneInJob(shellPid, shellPath, members, async () => {
-      const rows = await readWindowsProcessIdentityTableFresh()
+      const rows = await (fresh
+        ? readWindowsProcessIdentityTableFresh()
+        : readWindowsProcessIdentityTable())
       if ([...members].some((pid) => !rows.some((row) => row.pid === pid && row.name))) {
         throw new Error('Incomplete shell job identity')
       }

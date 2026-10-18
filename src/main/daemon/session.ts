@@ -248,8 +248,8 @@ export class Session {
     return this.output.getCwd()
   }
 
-  inspectChildProcesses(): PtyChildProcessVerdict | Promise<PtyChildProcessVerdict> {
-    return this.subprocess.inspectChildProcesses?.() ?? 'unverifiable'
+  inspectChildProcesses(fresh?: boolean): PtyChildProcessVerdict | Promise<PtyChildProcessVerdict> {
+    return this.subprocess.inspectChildProcesses?.(fresh) ?? 'unverifiable'
   }
 
   getForegroundProcess(options?: { rawFallback?: boolean }): string | null {

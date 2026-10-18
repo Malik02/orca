@@ -145,14 +145,29 @@ export class LocalPtyProvider implements IPtyProvider {
     return hasLocalPtyChildProcesses(id)
   }
 
-  async inspectProcess(id: string, options?: PtyProcessInspectionOptions): Promise<PtyProcessInspection> {
+  async inspectProcess(
+    id: string,
+    options?: PtyProcessInspectionOptions
+  ): Promise<PtyProcessInspection> {
     const proc = ptyProcesses.get(id)
     const incarnation = ptyIncarnations.get(id)
-    if (!proc || !incarnation || (options?.expectedIncarnationId && options.expectedIncarnationId !== incarnation)) {
-      return { foregroundProcess: null, hasChildProcesses: true, childProcessEvidence: 'unverifiable' }
+    if (
+      !proc ||
+      !incarnation ||
+      (options?.expectedIncarnationId && options.expectedIncarnationId !== incarnation)
+    ) {
+      return {
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        childProcessEvidence: 'unverifiable'
+      }
     }
     const foregroundProcess = await getLocalPtyForegroundProcess(id)
-    const childProcessEvidence = await inspectLocalPtyChildProcesses(id)
+    // A steady-state poll never decides adoption or close, so it may read the cached process table.
+    const childProcessEvidence = await inspectLocalPtyChildProcesses(
+      id,
+      options?.steadyState !== true
+    )
     // Neither asynchronous inspection may publish a replacement pane's identity.
     if (ptyProcesses.get(id) !== proc || ptyIncarnations.get(id) !== incarnation) {
       return {
