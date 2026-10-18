@@ -166,6 +166,11 @@ export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
 // A client offers Edit only when the host advertises it; there is no copy-and-delete fallback.
 export const AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY =
   'agent-session.queued-message-edit.v1' as const
+// Why: a client advertising this shows a queued card's images and edits its text in place, keeping
+// them. Released readers show only a card's text and edit by copying it and deleting the card, which
+// would drop the images, so the host publishes no card holding an image to a reader without it.
+export const AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY =
+  'agent-session.queued-image-cards.v1' as const
 // Why: `agentSession.conversationCommand`'s params are strict, so an older host rejects
 // `delivery`. A host advertising this holds a /compact sent while the agent works as a queued
 // card instead of refusing it. Clients ask only when queued-messages.v1 is advertised too:

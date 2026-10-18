@@ -98,7 +98,8 @@ export type MobileNativeChatController = {
   /** Outcome-preserving send: callers that pasted terminal input beforehand
    *  (image sends) must see 'unknown' to heal a possibly-orphaned paste. Such a
    *  caller passes its own `deadline` so the paste it already spent and this text
-   *  body share one budget instead of holding the composer for two. */
+   *  body share one budget instead of holding the composer for two, and `sentAt`,
+   *  when Send was pressed, so the sent message is timed before the paste. */
   handleNativeChatSendWithOutcome: (
     text: string,
     images?: string[],
@@ -107,7 +108,8 @@ export type MobileNativeChatController = {
       id?: string
       path: string
       previewUri: string
-    }[]
+    }[],
+    sentAt?: number
   ) => Promise<MobileNativeChatSendOutcome>
   /** Launch-context text still parked on the agent's TUI input line, or null.
    *  Image sends read it to size their leading clear (one Ctrl+U per line). */
