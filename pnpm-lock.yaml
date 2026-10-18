@@ -168,7 +168,7 @@ overrides:
 
 packageExtensionsChecksum: sha256-lRR6RFjKDBu1Uebv60XTm5nG1flPIwU9N1yUzaPaHRg=
 
-pnpmfileChecksum: sha256-28lDrKLTWmxr0tSYBUlZObzRiLb67QzJBeyhgTI9YCg=
+pnpmfileChecksum: sha256-A5FkjAxHLYu+iLUmTGl6IHGfcQb+W5EhE+O+HREhy2g=
 
 patchedDependencies:
   '@vscode/windows-process-tree@0.8.0': a09f2e8b2b4e73ef20c317af91f9e06c09abf62fa2c891d99b16f53047f596fd

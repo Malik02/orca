@@ -79,10 +79,8 @@ minimumReleaseAgeExclude:
   - oxlint@1.88.0
 shamefullyHoist: true
 
-# One store slot per package version shared by every worktree, instead of a full node_modules each.
-# config/pnpmfile.cjs turns it off under CI and (without opt-in) on Windows; see native-build-entry.cjs.
-enableGlobalVirtualStore: true
-# Under config/ because the repo root only admits allowlisted entries.
+# Enables pnpm's global virtual store outside CI; under config/ because the repo root only admits
+# allowlisted entries.
 pnpmfile: config/pnpmfile.cjs
 
 # Orca always launches the user's own resolved Claude CLI via

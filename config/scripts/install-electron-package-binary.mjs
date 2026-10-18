@@ -110,7 +110,7 @@ function assertForeignTargetLeavesSharedElectronAlone() {
   throw new Error(
     `Refusing to install a ${targetPlatform}-${targetArch} Electron into ${electronPackageDir}, ` +
       'which every worktree shares through the global virtual store. Unset ELECTRON_INSTALL_ARCH ' +
-      '/ npm_config_arch, or install with pnpm_config_enable_global_virtual_store=false.'
+      '/ npm_config_arch, or install with ORCA_PNPM_GLOBAL_VIRTUAL_STORE=0.'
   )
 }
 
