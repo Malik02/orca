@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { forgetProgramResult } from '@/lib/program-status/result-retention'
 import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
@@ -112,6 +113,10 @@ export function createTerminalPaneClosedHandler(
       })
     } else if (leafId && !isDetachedToTab) {
       useAppStore.getState().retireAgentPaneAuthority(makePaneKey(tabId, leafId))
+    }
+    if (leafId) {
+      // Why: a closed pane never sees the keypress that would end its retained program result.
+      forgetProgramResult(makePaneKey(tabId, leafId))
     }
     if (transport && !isRetiredSurface) {
       if (isDetachedToTab) {

@@ -1,4 +1,9 @@
 import { agentTypeToIconAgent } from '@/lib/agent-status'
+import {
+  armLateProgramResult,
+  dismissRetainedProgramResult
+} from '@/lib/program-status/result-retention'
+import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
@@ -93,6 +98,10 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   session.reconcileEndedProcessIfPaneQuiet = (armedAcceptedStatusSeq: number | undefined): void => {
     const current = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
     if (current && current.acceptedStatusSeq !== armedAcceptedStatusSeq) {
+      return
+    }
+    // Why: main's clear echoes back and would drop the result the deferred drop just kept.
+    if (current && isRetainedProgramResult(current)) {
       return
     }
     // Why: main-side only. The renderer row and launch config are already owned by the deferred
@@ -244,6 +253,8 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     // Why: the finished command may have moved HEAD or the index (e.g.
     // `git checkout`); nudge git UI now instead of waiting for a poll.
     dispatchTerminalCommandFinishedEvent(session.deps.worktreeId, bestEffortExitCode)
+    // Why first: a same-turn program Done retained by the drop below replaces this with its own row.
+    armLateProgramResult(session.cacheKey)
     const state = useAppStore.getState()
     const entry = state.agentStatusByPaneKey[session.cacheKey]
     const inferenceResult = session.flushPendingInterruptInference()
@@ -351,6 +362,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       // Why: a new command invalidates cleanup waiting on the previous D; only
       // a later confirmed shell boundary may retire this pane's live identity.
       session.deferredCommandFinishedStatusDrop = null
+      dismissRetainedProgramResult(session.cacheKey, useAppStore.getState())
       session.visibleForegroundSamplePending = false
       session.visibleForegroundSampleSettled = false
       // Why: typed commands can be aliases, so they only widen the bounded
