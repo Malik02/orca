@@ -163,6 +163,32 @@ describe('skills CLI runtime closure', () => {
     }
   })
 
+  it("resolves a linked package's imports from its store slot, as Node does", async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
+    try {
+      const artifactRoot = join(root, 'artifact')
+      const outDir = join(artifactRoot, 'out')
+      const slotDir = join(root, 'store', 'linked-package')
+      await writeSkillsCliFixture(outDir, "require('linked-package')\n")
+      await mkdir(slotDir, { recursive: true })
+      await writeFile(join(slotDir, 'package.json'), JSON.stringify({ main: 'index.js' }), 'utf8')
+      await writeFile(join(slotDir, 'index.js'), "require('dep')\n", 'utf8')
+      // Node reaches the ancestor copy (like ~/node_modules) from the slot, not the artifact's own.
+      for (const dir of [
+        join(root, 'node_modules', 'dep'),
+        join(artifactRoot, 'node_modules', 'dep')
+      ]) {
+        await mkdir(dir, { recursive: true })
+        await writeFile(join(dir, 'index.js'), '', 'utf8')
+      }
+      await symlink(slotDir, join(artifactRoot, 'node_modules', 'linked-package'), 'junction')
+
+      expect(() => collectRuntimeClosure(outDir, artifactRoot)).toThrow(/resolved outside/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('rejects package dependencies resolved outside the artifact', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
     try {

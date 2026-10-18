@@ -121,7 +121,8 @@ function resolveRuntimeImport(outDir, artifactRoot, importer, specifier) {
   }
   let resolved
   try {
-    resolved = createRequire(importer).resolve(specifier)
+    // Why physical: Node resolves from the realpath, so a store-linked importer must not see the artifact's own node_modules.
+    resolved = createRequire(realpathSync(importer)).resolve(specifier)
   } catch (error) {
     if (isOptionalPackageImport(artifactRoot, importer, specifier)) {
       return null

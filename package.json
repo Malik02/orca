@@ -119,7 +119,7 @@
     "postinstall": "pnpm run build:packages && node config/scripts/rebuild-native-deps.mjs",
     "rebuild:electron": "node config/scripts/rebuild-native-deps.mjs",
     "reclaim-space": "node config/scripts/reclaim-worktree-space.mjs",
-    "rebuild:node": "pnpm rebuild node-pty",
+    "rebuild:node": "node config/scripts/ensure-native-runtime.mjs --runtime=node",
     "build:unpack": "pnpm run build && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --dir",
     "build:win": "pnpm run build:desktop && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --win",
     "build:icons": "bash resources/icon-source/generate.sh",

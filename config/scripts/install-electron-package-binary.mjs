@@ -201,6 +201,10 @@ async function installElectronPackageBinary(sharedEntry) {
       process.exit(1)
     }
 
+    // Why: a worktree sharing this slot may have installed it during the download; never swap out a dist it runs.
+    if (isSharedPackageDir(electronPackageDir, projectDir) && electronPackageIsUsable()) {
+      return
+    }
     moveExtractedElectronDist(extractDir, electronDistDir)
     if (sharedEntry !== null) {
       publishElectronDistForSiblingWorktrees(sharedEntry, electronDistDir)
