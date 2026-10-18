@@ -115,10 +115,10 @@ function settledView(state: ManagedRuntimeInstallState, agent: string): ManagedR
         : null
     )
   }
-  const reinstall = translate('components.managed-runtime.reinstall', 'Reinstall {{agent}}', {
-    agent
-  })
   if (state.installedVersion !== null) {
+    const reinstall = translate('components.managed-runtime.reinstall', 'Reinstall {{agent}}', {
+      agent
+    })
     // Reinstalling a current copy checks it and repairs what's missing, so it needs the pin.
     const label = !state.installedCurrent
       ? translate('components.managed-runtime.update', 'Update')
@@ -143,7 +143,9 @@ function settledView(state: ManagedRuntimeInstallState, agent: string): ManagedR
       'This copy of {{agent}} is damaged.',
       { agent }
     )
-    return view(status, null, null, reinstall)
+    // The repair is the next step, so it is the row's button rather than a menu item.
+    const label = translate('components.managed-runtime.reinstallShort', 'Reinstall')
+    return { ...view(status, label), prominent: true }
   }
   const retry = translate('components.managed-runtime.tryAgain', 'Try again')
   if (operation?.kind === 'install' && operation.phase === 'cancelled') {

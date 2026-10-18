@@ -19240,6 +19240,7 @@
       "progress": "{{agent}} 다운로드",
       "readFailed": "이 호스트에서 {{agent}}을(를) 확인할 수 없습니다. 다시 시도하는 중입니다.",
       "reinstall": "{{agent}} 재설치",
+      "reinstallShort": "재설치",
       "remove": "다운로드한 런타임 제거",
       "moreActions": "{{agent}}의 더 많은 작업",
       "removeConfirm": "제거",

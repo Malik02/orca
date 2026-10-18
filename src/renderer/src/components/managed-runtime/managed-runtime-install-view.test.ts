@@ -128,8 +128,9 @@ describe('managedRuntimeInstallView', () => {
     ])
     expect(viewOf({ damaged: true })).toMatchObject({
       status: 'This copy of Fake is damaged.',
-      action: null,
-      menuAction: { label: 'Reinstall Fake' }
+      action: { label: 'Reinstall' },
+      prominent: true,
+      menuAction: null
     })
     const external = { source: 'external' as const }
     expect(shown(external)).toEqual([

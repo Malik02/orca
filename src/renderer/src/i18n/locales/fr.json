@@ -19344,6 +19344,7 @@
       "progress": "Téléchargement de {{agent}}",
       "readFailed": "Impossible de vérifier {{agent}} sur cet hôte. Nouvel essai en cours.",
       "reinstall": "Réinstaller {{agent}}",
+      "reinstallShort": "Réinstaller",
       "remove": "Supprimer le runtime téléchargé",
       "moreActions": "Plus d'actions pour {{agent}}",
       "removeConfirm": "Supprimer",

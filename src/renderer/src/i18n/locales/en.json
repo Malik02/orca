@@ -19461,6 +19461,7 @@
       "progress": "{{agent}} download",
       "readFailed": "Could not check {{agent}} on this host. Retrying.",
       "reinstall": "Reinstall {{agent}}",
+      "reinstallShort": "Reinstall",
       "remove": "Remove downloaded runtime",
       "moreActions": "More actions for {{agent}}",
       "removeConfirm": "Remove",

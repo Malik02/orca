@@ -19240,6 +19240,7 @@
       "progress": "{{agent}} 下载",
       "readFailed": "无法检查此主机上的 {{agent}}。正在重试。",
       "reinstall": "重新安装 {{agent}}",
+      "reinstallShort": "重新安装",
       "remove": "移除已下载的运行时",
       "moreActions": "{{agent}} 的更多操作",
       "removeConfirm": "移除",

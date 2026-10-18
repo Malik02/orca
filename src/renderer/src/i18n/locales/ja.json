@@ -19240,6 +19240,7 @@
       "progress": "{{agent}} のダウンロード",
       "readFailed": "このホストの {{agent}} を確認できませんでした。再試行しています。",
       "reinstall": "{{agent}} を再インストール",
+      "reinstallShort": "再インストール",
       "remove": "ダウンロードしたランタイムを削除",
       "moreActions": "{{agent}}の追加操作",
       "removeConfirm": "削除",

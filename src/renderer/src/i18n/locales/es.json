@@ -19228,6 +19228,7 @@
       "progress": "Descarga de {{agent}}",
       "readFailed": "No se pudo comprobar {{agent}} en este host. Reintentando.",
       "reinstall": "Reinstalar {{agent}}",
+      "reinstallShort": "Reinstalar",
       "remove": "Quitar el runtime descargado",
       "moreActions": "Más acciones para {{agent}}",
       "removeConfirm": "Quitar",
