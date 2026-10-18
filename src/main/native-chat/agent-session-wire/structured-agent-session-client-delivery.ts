@@ -18,6 +18,7 @@ import { StructuredAgentSessionSendSettlement } from './structured-agent-session
 import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed'
+import type { CapturedChildWorkStops } from './structured-agent-session-status-ownership'
 import { createStructuredAgentSessionHostStatusFeed } from './structured-agent-session-host-status-feed'
 import type { StructuredAgentSessionChildWorkProducer } from './structured-agent-session-subagent-rows'
 import {
@@ -118,6 +119,14 @@ export class StructuredAgentSessionClientDelivery {
   readChildWork = (sessionId: string): AgentChildWorkView[] | undefined =>
     this.statusFeed.readChildWork(sessionId)
 
+  /** Child work the provider reported running and not over: what every owed-work decision reads. */
+  childWorkOpen = (sessionId: string): boolean => this.statusFeed.childWorkOpen(sessionId)
+
+  captureChildWorkStops = (
+    sessionId: string,
+    handleIds: readonly string[]
+  ): CapturedChildWorkStops => this.statusFeed.captureChildWorkStops(sessionId, handleIds)
+
   childWorkIncomplete = (sessionId: string): boolean =>
     this.statusFeed.childWorkIncomplete(sessionId)
 
@@ -209,7 +218,9 @@ export class StructuredAgentSessionClientDelivery {
 
   private settlementReading(sessionId: string, journal: AgentSessionJournal) {
     return {
-      submissions: () => journal.submissions(),
+      // A send the child stopped holding unanswered settles the wait as doubt (`publishedSubmission`).
+      submissions: () =>
+        journal.submissions().map(this.currentWork(sessionId, journal).publishedSubmission),
       cursor: () => journal.cursor(),
       activeTurnId: () => this.currentWork(sessionId, journal).activeTurnId()
     }

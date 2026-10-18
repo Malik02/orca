@@ -15,12 +15,17 @@ import {
 } from '../../../shared/workspace-layout/workspace-layout-published'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { GIT_KEY } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
+import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { reportWindowSessionWriteActivity } from '../lib/window-session-write-activity'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
 import type { LayoutFrameSlices } from '../store/workspace-layout-frame-slices'
-import { afterLayoutFrame, endLayoutFramePositions } from './layout-frame-position'
+import {
+  afterLayoutFrame,
+  endLayoutFramePositions,
+  layoutFramesFlowing
+} from './layout-frame-position'
 import { holdTabPaneTree, requestTabPaneTreeRedraw } from './layout-owner-pane-intents'
 import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
 
@@ -177,6 +182,30 @@ describe('the window drawn from layout frames', () => {
     sync.close()
   })
 
+  it('keeps the window’s pane remount generation through a structure frame: it is the window’s', async () => {
+    const { store, sync, layouts } = await bootWithFrames('local', localDesktopSession())
+    sync.start()
+    store.getState().remountTerminalTabForRecovery('tab-shell')
+    const renamed = structuredClone(layouts[GIT_KEY]!)
+    renamed.tabs.find((tab) => tab.id === 'tab-shell')!.customTitle = 'renamed'
+    stream.onFrame!({ type: 'workspace', key: GIT_KEY, layout: renamed })
+    await flushMicrotasks()
+    expect(
+      store.getState().tabsByWorktree[GIT_KEY]!.find((tab) => tab.id === 'tab-shell')
+    ).toMatchObject({ customTitle: 'renamed', generation: 1 })
+    sync.close()
+  })
+
+  it('answers main’s terminal tab by its terminal id, shown or not, until the stream ends', async () => {
+    const { sync, layouts } = await bootWithFrames('local', localDesktopSession())
+    const shell = layouts[GIT_KEY]!.tabs.find((tab) => tab.entityId === 'tab-shell')!
+    expect(sync.terminalTab(GIT_KEY, 'tab-shell')).toBe(shell)
+    expect(sync.terminalTab(GIT_KEY, 'missing')).toBeUndefined()
+    stream.onStatus!({ state: 'lost' })
+    expect(sync.terminalTab(GIT_KEY, 'tab-shell')).toBeUndefined()
+    sync.close()
+  })
+
   it('runs a reply waiting on a frame after the store shows it, and every waiter when the stream ends', async () => {
     const { store, sync, layouts } = await bootWithFrames('local', localDesktopSession())
     sync.start()
@@ -319,6 +348,36 @@ describe('the window drawn from layout frames', () => {
     sync.close()
   })
 
+  it('after a lost stream reopens, its snapshot redraws every workspace from main', async () => {
+    const { store, sync, layouts } = await bootWithFrames('local', localDesktopSession())
+    sync.start()
+    await flushMicrotasks()
+    stream.onStatus!({ state: 'lost' })
+    expect(layoutFramesFlowing()).toBe(false)
+    // Drawn while no frame came; main's snapshot does not have it.
+    const drawn = { type: 'leaf' as const, leafId: 'drawn-by-the-window' }
+    store.setState({
+      terminalLayoutsByTabId: {
+        ...store.getState().terminalLayoutsByTabId,
+        'tab-shell': { ...store.getState().terminalLayoutsByTabId['tab-shell']!, root: drawn }
+      }
+    })
+
+    stream.onStatus!({ state: 'connecting' })
+    expect(layoutFramesFlowing()).toBe(true)
+    const renamed = structuredClone(layouts)
+    renamed[GIT_KEY]!.tabs.find((tab) => tab.id === 'tab-unbound')!.customTitle = 'from main'
+    stream.onFrame!(snapshot(renamed))
+    stream.onStatus!({ state: 'live' })
+    await flushMicrotasks()
+
+    const rows = store.getState().tabsByWorktree[GIT_KEY]!
+    expect(rows.find((tab) => tab.id === 'tab-unbound')!.customTitle).toBe('from main')
+    expect(store.getState().terminalLayoutsByTabId['tab-shell']!.root).not.toEqual(drawn)
+    expect(sync.terminalTab(GIT_KEY, 'tab-shell')).toBeDefined()
+    sync.close()
+  })
+
   it('shows a live title change of the focused pane at once, even while a write is owed', async () => {
     const { store, sync, layouts } = await bootWithFrames('local', localDesktopSession())
     sync.start()
@@ -365,6 +424,22 @@ describe('the window drawn from layout frames', () => {
     stream.onStatus!({ state: 'refused' })
     await flushMicrotasks()
     expect(SLICES.filter((slice) => store.getState()[slice] !== before[slice])).toEqual([])
+    sync.close()
+  })
+
+  it('gives a moved editor tab an older build saved under its old workspace the right id', async () => {
+    // Before #29930 a tab Orca moved to its file's workspace kept the source's worktree id.
+    const session = localDesktopSession()
+    const ownedId = buildOwnedEditorFileId('/Users/dev/orca/src/app.ts', GIT_KEY, null)
+    const entry = session.unifiedTabs![GIT_KEY]!.find((tab) => tab.contentType === 'editor')!
+    entry.entityId = ownedId
+    entry.worktreeId = 'repo-2::/Users/dev/other'
+    const { store, sync } = await bootWithFrames('local', session)
+    sync.start()
+    await flushMicrotasks()
+    const tabs = store.getState().unifiedTabsByWorktree[GIT_KEY]!
+    expect(tabs.find((tab) => tab.entityId === ownedId)).toMatchObject({ worktreeId: GIT_KEY })
+    expect(tabs.every((tab) => tab.worktreeId === GIT_KEY)).toBe(true)
     sync.close()
   })
 

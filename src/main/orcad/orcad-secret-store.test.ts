@@ -241,15 +241,21 @@ describe('createOrcadSecretStore', () => {
 
   it('lets the first start migrate while a concurrent one with a locked keyring waits', async () => {
     const { encodedKey, sealed } = legacyKeyringHost()
+    let enterMigration = (): void => {}
+    const migrating = new Promise<void>((resolveEntered) => {
+      enterMigration = resolveEntered
+    })
     const slowSuccess: OrcadLegacyKeyringReader = async () => {
+      enterMigration()
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 50))
       return { key: encodedKey }
     }
     const fastFailure = fakeLegacyKeyring({ failure: 'exited 36' })
-    const [first, second] = await Promise.all([
-      prepare({ legacyKeyring: slowSuccess }),
-      prepare({ legacyKeyring: fastFailure.read })
-    ])
+    const firstStart = prepare({ legacyKeyring: slowSuccess })
+    // Why: start the second only once the first holds the lock; otherwise lock order is a race.
+    await migrating
+    const second = await prepare({ legacyKeyring: fastFailure.read })
+    const first = await firstStart
     expect(first.store.decryptString(sealed)).toBe('lin_api_secret')
     expect(second.store.decryptString(sealed)).toBe('lin_api_secret')
     expect(fastFailure.reads).toEqual([])

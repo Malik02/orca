@@ -72,8 +72,11 @@ pnpm build
 ```
 
 For repeated local typechecks, use `pnpm tc` (or `pnpm tc:node`, `pnpm tc:web`,
-and `pnpm tc:cli`). These keep TypeScript's incremental cache. CI uses
-`pnpm typecheck:ci` with Bun for full checks. Shared tests are checked by the
+and `pnpm tc:cli`). These run `bun check` from the pinned `bun` devDependency —
+about a third of tsc's CPU and an eighth of its memory, so several agents can
+typecheck at once. Pass `--compiler=native` to use tsc and its incremental
+cache instead. CI uses `pnpm typecheck:ci`, the same Bun check with CI's
+concurrency. Shared tests are checked by the
 Node project; shared production code is checked in all three environments.
 Run `pnpm tc:node` after editing shared tests, or `pnpm tc` to check everything.
 
@@ -135,7 +138,7 @@ All stable kinds (`patch`, `minor`, `major`) are computed off the latest _stable
 - If the latest RC tag exists but is still draft-only or missing its GitHub Release, the workflow resumes that tag only when it was built from the current release ref. Otherwise the next RC number is cut.
 - RC numbering also considers release commits on `main`, so deleting a stale tag does not let a later cut reuse the same RC number.
 - Off-main releases (when `ref` is not the tip of `main`) only push the tag. `main` is never mutated from a non-main ref, so you can safely release an older commit without polluting history.
-- When `ref` is the tip of `main`, the version-bump commit is fast-forwarded onto `main` so local `package.json` stays in sync with what's shipped.
+- When `ref` is the tip of `main`, the workflow tries to fast-forward the version-bump commit onto `main`. If main requires pull requests, it leaves main unchanged and pushes only the release tag. Other push errors still stop the cut.
 
 **Common scenarios:**
 

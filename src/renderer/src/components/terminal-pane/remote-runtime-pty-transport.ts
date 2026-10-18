@@ -389,6 +389,8 @@ export function createRemoteRuntimePtyTransport(
   })
   let lastRecoveryStateKey = ''
   let pendingViewportClaim = false
+  // Why: recovery holds viewport sends, so the intent must survive to the stream that releases typing.
+  let recoveryDeferredViewport: 'claim' | 'resize' | null = null
   let pendingClaimInput: { text: string; queryReply: boolean }[] = []
   let pendingClaimQueryReplyCount = 0
   let terminalCreateRetryWait: {
@@ -1986,9 +1988,40 @@ export function createRemoteRuntimePtyTransport(
     }
   })
 
+  function deferViewportForRecovery(claim: boolean): void {
+    // Why: the replay sends the latest viewport; an older queued batch flushing after it would win.
+    viewportBatcher.clear()
+    recoveryDeferredViewport = claim ? 'claim' : (recoveryDeferredViewport ?? 'resize')
+  }
+
+  // Why before input: typing released at the ack must land at this viewer's grid, not a peer's.
+  function replayRecoveryDeferredViewport(stream: RemoteRuntimeMultiplexedTerminal): void {
+    const deferred = recoveryDeferredViewport
+    recoveryDeferredViewport = null
+    if (!deferred || !desiredViewport) {
+      return
+    }
+    const { cols, rows } = desiredViewport
+    if (deferred === 'claim' && isUnconfirmedClaim(stream, cols, rows)) {
+      return
+    }
+    const sent =
+      deferred === 'resize' ? stream.resize(cols, rows) : stream.claimViewport(cols, rows)
+    if (!sent) {
+      // Why: a failed write starts another recovery, whose stream must still carry this intent.
+      deferViewportForRecovery(deferred === 'claim')
+    } else if (deferred === 'claim') {
+      unconfirmedClaim = { stream, cols, rows, sentAt: Date.now() }
+    }
+  }
+
   function sendViewportUpdate(cols: number, rows: number, claim = false): void {
     const targetHandle = handle
-    if (!connected || !targetHandle || recoveryBlocksIo()) {
+    if (!connected || !targetHandle) {
+      return
+    }
+    if (inputBlocked()) {
+      deferViewportForRecovery(claim)
       return
     }
     const stream = getCurrentMultiplexedStream(targetHandle)
@@ -2532,6 +2565,8 @@ export function createRemoteRuntimePtyTransport(
     let transportClosed = false
     let subscriptionAttached = false
     let subscriptionSnapshotHadContent = false
+    // Why: the ack can arrive before subscribeTerminal resolves; install replays in that order.
+    let installedStream: RemoteRuntimeMultiplexedTerminal | null = null
     // Why: viewport handed to subscribe; a resize during the round-trip falls back to the refresh-only one-shot RPC, replayed through the stream below once current.
     const subscribedViewport = desiredViewport
     const isCurrentSubscription = (): boolean =>
@@ -2615,12 +2650,29 @@ export function createRemoteRuntimePtyTransport(
         onSubscribeAcknowledged: () => {
           if (isCurrentSubscription()) {
             inputReadySubscription = generation
+            if (
+              installedStream &&
+              getCurrentMultiplexedStream(subscribedHandle) === installedStream
+            ) {
+              replayRecoveryDeferredViewport(installedStream)
+              if (!isCurrentSubscription()) {
+                return
+              }
+            }
             releaseHeldInput()
           }
         },
         onSubscribed: () => {
           if (!isCurrentSubscription()) {
             return
+          }
+          if (installedStream) {
+            // Why: hosts without a subscribed ack never reach the ack replay.
+            replayRecoveryDeferredViewport(installedStream)
+            // Why: a failed replay write closes the stream and begins recovery; marking healthy would cancel it.
+            if (!isCurrentSubscription()) {
+              return
+            }
           }
           storedCallbacks.onOutputPauseChanged?.(
             desiredOutputPaused,
@@ -2781,13 +2833,19 @@ export function createRemoteRuntimePtyTransport(
     closeMultiplexedStream()
     multiplexedStream = nextStream
     multiplexedStreamHandle = subscribedHandle
+    installedStream = nextStream
     setAttachmentReady(subscriptionAttached)
     if (subscriptionAttached) {
       resetRecoveryReplacementPolicy()
       markRecoveryHealthy()
     }
     // Why: a viewport change during the subscribe round-trip hit the no-op one-shot fallback; replay the latest viewport so the PTY isn't stuck at subscribe-time size.
-    if (pendingViewportClaim && desiredViewport) {
+    if (recoveryDeferredViewport) {
+      // Why ack-gated: a host still resolving the PTY ignores viewport frames sent after Subscribe.
+      if (inputReadySubscription === generation || subscriptionAttached) {
+        replayRecoveryDeferredViewport(nextStream)
+      }
+    } else if (pendingViewportClaim && desiredViewport) {
       if (!isUnconfirmedClaim(nextStream, desiredViewport.cols, desiredViewport.rows)) {
         nextStream.claimViewport(desiredViewport.cols, desiredViewport.rows)
         unconfirmedClaim = { stream: nextStream, ...desiredViewport, sentAt: Date.now() }
@@ -3356,7 +3414,8 @@ export function createRemoteRuntimePtyTransport(
         return false
       }
       rememberViewport(cols, rows)
-      if (recoveryBlocksIo()) {
+      if (inputBlocked()) {
+        deferViewportForRecovery(true)
         return true
       }
       viewportBatcher.clear()
@@ -3384,7 +3443,8 @@ export function createRemoteRuntimePtyTransport(
         return false
       }
       rememberViewport(cols, rows)
-      if (recoveryBlocksIo()) {
+      if (inputBlocked()) {
+        deferViewportForRecovery(meta?.claim === true)
         return true
       }
       if (meta?.claim) {

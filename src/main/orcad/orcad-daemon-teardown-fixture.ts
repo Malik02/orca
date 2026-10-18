@@ -249,28 +249,16 @@ export async function killProfileDaemons(userData: string): Promise<void> {
   }
 }
 
-/**
- * A full orcad on Windows probes WSL with `wsl.exe` run in its profile, and the WSL
- * service, outside the test's process tree, holds that directory busy for ~60s after.
- */
-export const WINDOWS_WSL_PROFILE_HOLD_MS = 75_000
-
-/**
- * Removes a test root, retrying a late writer's ENOTEMPTY/EBUSY on every platform.
- * `windowsBusyHoldMs` keeps retrying a Windows EBUSY that long once attempts run out.
- */
-export async function removeTestRoot(root: string, windowsBusyHoldMs = 0): Promise<void> {
-  const holdDeadline = Date.now() + (process.platform === 'win32' ? windowsBusyHoldMs : 0)
+/** Removes a test root, retrying a late writer's ENOTEMPTY/EBUSY on every platform. */
+export async function removeTestRoot(root: string): Promise<void> {
   for (let attempt = 1; ; attempt += 1) {
     try {
       await removeTree(root)
       return
     } catch (error) {
-      const code = errorCode(error) ?? ''
-      const held = code === 'EBUSY' && Date.now() < holdDeadline
       if (
-        (attempt >= REMOVE_ATTEMPTS && !held) ||
-        !['ENOTEMPTY', 'EBUSY', 'EPERM'].includes(code)
+        attempt >= REMOVE_ATTEMPTS ||
+        !['ENOTEMPTY', 'EBUSY', 'EPERM'].includes(errorCode(error) ?? '')
       ) {
         throw error
       }

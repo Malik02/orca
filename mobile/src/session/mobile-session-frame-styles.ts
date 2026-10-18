@@ -91,6 +91,8 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'stretch',
     marginVertical: -spacing.xs,
+    // Room between the title's last letter and the strip's edge.
+    marginLeft: spacing.md,
     // Fixed edge so tabs scrolled past it read as clipped, not as part of the title.
     borderLeftWidth: 1,
     borderLeftColor: colors.borderSubtle
