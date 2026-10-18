@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -15,7 +15,7 @@ afterEach(() => {
 function makePackage() {
   const root = mkdtempSync(path.join(tmpdir(), 'orca-shared-native-'))
   roots.push(root)
-  return root
+  return realpathSync(root)
 }
 
 describe('ensureSharedNativeBuild', () => {
@@ -38,6 +38,23 @@ describe('ensureSharedNativeBuild', () => {
     })
     expect(result).toEqual({ entryDir, built: false })
     expect(checked).toEqual([entryDir])
+  })
+
+  it('publishes beside the physical package dir, not through the project link', () => {
+    const packageDir = makePackage()
+    const entryDir = path.join(packageDir, 'build', 'orca-napi-linux-x64')
+    mkdirSync(entryDir, { recursive: true })
+    const link = path.join(makePackage(), 'node-pty')
+    symlinkSync(packageDir, link, 'junction')
+    const result = ensureSharedNativeBuild({
+      moduleName: 'node-pty',
+      packageDir: link,
+      platform: 'linux',
+      arch: 'x64',
+      checkBuildDir: () => null,
+      log: () => {}
+    })
+    expect(result.entryDir).toBe(entryDir)
   })
 })
 

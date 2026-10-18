@@ -105,4 +105,19 @@ describe('publishSharedTree', () => {
     expect(readPayload(entry)).toBe('bad')
     expect(readdirSync(root)).toEqual(['entry'])
   })
+  it('never quarantines a good entry a sibling published while the bad one was judged', () => {
+    const root = makeRoot()
+    const entry = writeTree(path.join(root, 'entry'), 'bad')
+    const staging = writeTree(sharedTreeStagingPath(entry), 'mine')
+    const sibling = writeTree(path.join(root, 'sibling'), 'sibling')
+    const judgeThenRace = (dir) => {
+      const usable = isGood(dir)
+      rmSync(entry, { recursive: true, force: true })
+      renameSync(sibling, entry)
+      return usable
+    }
+    expect(publishSharedTree(staging, entry, { isUsable: judgeThenRace })).toBe(false)
+    expect(readPayload(entry)).toBe('sibling')
+    expect(readdirSync(root)).toEqual(['entry'])
+  })
 })

@@ -65,6 +65,9 @@ function isNativeBuildEntryName(name) {
   return name.startsWith(ENTRY_PREFIX)
 }
 
+/** electron-builder ignore globs for in-flight staging and quarantine trees (shared-tree-publish.mjs). */
+const TRANSIENT_NATIVE_BUILD_ENTRY_FILTER = [`!build/${ENTRY_PREFIX}*.{staging,unusable}-*{,/**/*}`]
+
 /**
  * Whether `packageDir` physically lives outside this project, i.e. another worktree can load it.
  * Why realpath: under the global virtual store node_modules/<pkg> is a link into the store.
@@ -124,6 +127,7 @@ function isSourceBuildDir(nativeDir) {
 
 module.exports = {
   NATIVE_BUILD_PACKAGES,
+  TRANSIENT_NATIVE_BUILD_ENTRY_FILTER,
   isNativeBuildEntryName,
   isSharedNativePackage,
   isSharedPackageDir,

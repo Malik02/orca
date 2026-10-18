@@ -101,7 +101,9 @@ export function ensureSharedNativeBuild({
   nodeGypEntry,
   log = console.warn
 }) {
-  const entryDir = nativeBuildEntryDir(packageDir, moduleName, { platform, arch })
+  // Why: pinned once, so a concurrent relink can't publish this source's build into another slot.
+  const physicalDir = realpathSync(packageDir)
+  const entryDir = nativeBuildEntryDir(physicalDir, moduleName, { platform, arch })
   if (existsSync(entryDir)) {
     const reason = checkBuildDir(entryDir)
     if (reason === null) {
@@ -115,7 +117,7 @@ export function ensureSharedNativeBuild({
   try {
     const releaseDir = compileInScratchCopy({
       moduleName,
-      packageDir,
+      physicalDir,
       sourceDir: join(workDir, 'package'),
       arch,
       nodeGypEntry,
@@ -154,8 +156,7 @@ export function ensureSharedNativeBuild({
   }
 }
 
-function compileInScratchCopy({ moduleName, packageDir, sourceDir, arch, nodeGypEntry, log }) {
-  const physicalDir = realpathSync(packageDir)
+function compileInScratchCopy({ moduleName, physicalDir, sourceDir, arch, nodeGypEntry, log }) {
   cpSync(physicalDir, sourceDir, {
     recursive: true,
     dereference: true,
