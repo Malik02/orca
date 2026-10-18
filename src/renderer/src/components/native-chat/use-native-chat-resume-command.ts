@@ -143,12 +143,13 @@ export function useNativeChatResumeCommand(args: {
         // Choosing Orca's own row is explicit, so an earlier skill pick of the same name doesn't count.
         if (leading && item.kind === 'command' && item.orcaOwned) {
           clearSkillOrigin()
-          open('')
+          // The caret can sit right after `/resume` with a search already typed past it.
+          open(parseNativeChatResumeDraft(textareaRef.current?.value ?? '') ?? '')
           return
         }
         pick(item)
       },
-    [autocomplete, clearSkillOrigin, open]
+    [autocomplete, clearSkillOrigin, open, textareaRef]
   )
 
   return { consume, interceptPick }
