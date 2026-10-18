@@ -290,7 +290,7 @@ const NATIVE_CACHE_FILES = new Set([
   '.github/actions/prepare-native-runtime/action.yml',
   'pnpm-workspace.yaml',
   '.npmrc',
-  '.pnpmfile.cjs',
+  'config/pnpmfile.cjs',
   'config/scripts/ensure-native-runtime.mjs',
   'config/scripts/initialize-windows-native-toolchain.mjs',
   'config/scripts/capture-windows-native-environment.cmd',

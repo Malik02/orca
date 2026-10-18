@@ -6,7 +6,7 @@ const {
   GLOBAL_VIRTUAL_STORE_OPT_IN_ENV: OPT_IN_ENV,
   allowsGlobalVirtualStore,
   hooks
-} = require('../../.pnpmfile.cjs')
+} = require('../pnpmfile.cjs')
 
 describe('allowsGlobalVirtualStore', () => {
   const cases = [
@@ -28,7 +28,7 @@ describe('allowsGlobalVirtualStore', () => {
   })
 })
 
-describe('.pnpmfile.cjs updateConfig', () => {
+describe('config/pnpmfile.cjs updateConfig', () => {
   it('only ever turns the store off, never on', () => {
     const config = hooks.updateConfig({ enableGlobalVirtualStore: false })
     expect(config.enableGlobalVirtualStore).toBe(false)

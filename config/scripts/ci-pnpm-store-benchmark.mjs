@@ -33,7 +33,7 @@ const manifests = [
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
   // The lockfile pins its checksum, so a frozen install fails without it.
-  '.pnpmfile.cjs',
+  'config/pnpmfile.cjs',
   ...workspacePackageManifests(repository)
 ]
 const pnpm = resolvePnpmCliInvocation()

@@ -64,7 +64,7 @@ describe('patched dependencies', () => {
         'pnpm-lock.yaml',
         'pnpm-workspace.yaml',
         // The lockfile pins its checksum, so a frozen install fails without it.
-        '.pnpmfile.cjs',
+        'config/pnpmfile.cjs',
         ...workspacePackageManifests(PROJECT_DIR)
       ]) {
         mkdirSync(resolve(scratch, file, '..'), { recursive: true })
