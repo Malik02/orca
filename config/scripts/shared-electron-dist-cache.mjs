@@ -4,6 +4,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { makeTreeReadOnly, shareTree } from './space-sharing-copy.mjs'
 import { publishSharedTree, sharedTreeStagingPath } from './shared-tree-publish.mjs'
+import { isSharedPackageDir } from './native-build-entry.cjs'
 
 const IDENTITY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 // Sibling of path.txt, never inside dist: an install replaces dist wholesale.
@@ -22,6 +23,11 @@ export function resolveSharedElectronDistEntry(options) {
     return null
   }
   if (![version, targetPlatform, targetArch].every((part) => IDENTITY_PATTERN.test(part ?? ''))) {
+    return null
+  }
+  // Under pnpm's global virtual store every worktree already shares one electron package dir;
+  // adopting a cache entry would swap the dist out from under worktrees running it.
+  if ((options.isSharedPackageDir ?? isSharedPackageDir)(options.electronPackageDir, repoRoot)) {
     return null
   }
   let gitCommonDir
